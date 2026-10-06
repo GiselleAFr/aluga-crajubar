@@ -19,6 +19,7 @@ class AuthApiTest extends TestCase
         $response = $this->postJson('/api/auth/register', [
             'name' => 'Ana Silva',
             'email' => 'ana@example.com',
+            'phone' => '(88) 99999-1234',
             'password' => 'senha-segura-123',
             'password_confirmation' => 'senha-segura-123',
             'device_name' => 'android',
@@ -27,9 +28,20 @@ class AuthApiTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('token_type', 'Bearer')
             ->assertJsonPath('user.email', 'ana@example.com')
+            ->assertJsonPath('user.phone', '+5588999991234')
             ->assertJsonStructure(['access_token', 'expires_at']);
 
-        $this->assertDatabaseHas('users', ['email' => 'ana@example.com']);
+        $this->assertDatabaseHas('users', ['email' => 'ana@example.com', 'phone' => '+5588999991234']);
+    }
+
+    public function test_phone_is_required_when_registering(): void
+    {
+        $this->postJson('/api/auth/register', [
+            'name' => 'Ana Silva',
+            'email' => 'ana@example.com',
+            'password' => 'senha-segura-123',
+            'password_confirmation' => 'senha-segura-123',
+        ])->assertUnprocessable()->assertJsonValidationErrors('phone');
     }
 
     public function test_user_can_log_in_with_valid_credentials(): void

@@ -17,7 +17,7 @@ class AuthController extends Controller
 {
     public function register(RegisterRequest $request): JsonResponse
     {
-        $user = User::create($request->safe()->only(['name', 'email', 'password']));
+        $user = User::create($request->safe()->only(['name', 'email', 'phone', 'password']));
 
         return $this->authenticatedResponse($user, $request->input('device_name', 'flutter'))
             ->setStatusCode(201);
@@ -92,6 +92,6 @@ class AuthController extends Controller
 
     private function userData(User $user): array
     {
-        return $user->only(['id', 'name', 'email', 'created_at']);
+        return $user->only(['id', 'name', 'email', 'phone', 'created_at']);
     }
 }
