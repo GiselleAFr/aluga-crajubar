@@ -18,6 +18,7 @@ class AuthController extends Controller
     public function register(RegisterRequest $request): JsonResponse
     {
         $user = User::create($request->safe()->only(['name', 'email', 'phone', 'password']));
+        $user->refresh();
 
         return $this->authenticatedResponse($user, $request->input('device_name', 'flutter'))
             ->setStatusCode(201);
@@ -92,6 +93,12 @@ class AuthController extends Controller
 
     private function userData(User $user): array
     {
-        return $user->only(['id', 'name', 'email', 'phone', 'created_at']);
+        return [
+            ...$user->only(['id', 'name', 'email', 'phone', 'created_at']),
+            'role' => $user->role->value,
+            'is_landlord' => $user->isLandlord(),
+            // O Flutter deve exibir a aba "Locador" somente se ela estiver presente nesta lista.
+            'available_tabs' => $user->isLandlord() ? ['cliente', 'locador'] : ['cliente'],
+        ];
     }
 }
