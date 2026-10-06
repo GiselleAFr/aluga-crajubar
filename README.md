@@ -30,6 +30,8 @@ URL base local: `http://SEU-IP:8000/api`. Nas chamadas autenticadas envie `Autho
 | Usuário logado | `GET /auth/me` | — |
 | Sair | `POST /auth/logout` | — |
 
+O cadastro público sempre cria um usuário com `role: "client"`. Nas respostas de login e `GET /auth/me`, o campo `user.is_landlord` identifica locadores e `user.available_tabs` informa quais abas o Flutter pode exibir: `['cliente']` para clientes e `['cliente', 'locador']` para locadores. A atribuição do papel `landlord` não é exposta no cadastro público, evitando elevação indevida de privilégio.
+
 Exemplo de login:
 
 ```json

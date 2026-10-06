@@ -29,6 +29,9 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('token_type', 'Bearer')
             ->assertJsonPath('user.email', 'ana@example.com')
             ->assertJsonPath('user.phone', '+5588999991234')
+            ->assertJsonPath('user.role', 'client')
+            ->assertJsonPath('user.is_landlord', false)
+            ->assertJsonPath('user.available_tabs', ['cliente'])
             ->assertJsonStructure(['access_token', 'expires_at']);
 
         $this->assertDatabaseHas('users', ['email' => 'ana@example.com', 'phone' => '+5588999991234']);
@@ -55,6 +58,22 @@ class AuthApiTest extends TestCase
         ]);
 
         $response->assertOk()->assertJsonPath('user.id', $user->id)->assertJsonStructure(['access_token']);
+    }
+
+    public function test_login_identifies_a_landlord_and_releases_the_landlord_tab(): void
+    {
+        $user = User::factory()->landlord()->create([
+            'email' => 'locador@example.com',
+            'password' => Hash::make('senha-segura-123'),
+        ]);
+
+        $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'senha-segura-123',
+        ])->assertOk()
+            ->assertJsonPath('user.role', 'landlord')
+            ->assertJsonPath('user.is_landlord', true)
+            ->assertJsonPath('user.available_tabs', ['cliente', 'locador']);
     }
 
     public function test_invalid_credentials_are_rejected(): void
