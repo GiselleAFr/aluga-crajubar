@@ -24,7 +24,7 @@ URL base local: `http://SEU-IP:8000/api`. Nas chamadas autenticadas envie `Autho
 | Tela/ação | Método e rota | Corpo JSON |
 | --- | --- | --- |
 | Botão **Log In** | `POST /auth/login` | `email`, `password`, `remember` (booleano), `device_name` (opcional) |
-| Botão **Cadastre-se** | `POST /auth/register` | `name`, `email`, `password`, `password_confirmation`, `device_name` (opcional) |
+| Botão **Cadastre-se** | `POST /auth/register` | `name`, `email`, `phone`, `password`, `password_confirmation`, `device_name` (opcional) |
 | **Esqueceu a senha?** | `POST /auth/forgot-password` | `email` |
 | Definir nova senha | `POST /auth/reset-password` | `email`, `token`, `password`, `password_confirmation` |
 | Usuário logado | `GET /auth/me` | — |
