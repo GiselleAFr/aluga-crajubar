@@ -60,6 +60,7 @@ class PasswordResetJwtService
         $user->forceFill(['password' => $password, 'remember_token' => Str::random(60)])->save();
         $user->tokens()->delete();
         DB::table('password_reset_tokens')->where('email', $email)->delete();
+        DB::table('password_change_confirmations')->where('email', $email)->delete();
 
         return true;
     }

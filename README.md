@@ -27,6 +27,8 @@ URL base local: `http://SEU-IP:8000/api`. Nas chamadas autenticadas envie `Autho
 | Botão **Cadastre-se** | `POST /auth/register` | `name`, `email`, `phone`, `password`, `password_confirmation`, `device_name` (opcional) |
 | **Esqueceu a senha?** | `POST /auth/forgot-password` | `email` |
 | Definir nova senha | `POST /auth/reset-password` | `email`, `token`, `password`, `password_confirmation` |
+| Solicitar alteração de senha | `POST /auth/change-password` | `current_password`, `password`, `password_confirmation` |
+| Confirmar alteração de senha | `POST /auth/confirm-password-change` | `token` |
 | Usuário logado | `GET /auth/me` | — |
 | Sair | `POST /auth/logout` | — |
 
@@ -48,3 +50,5 @@ O login devolve `access_token`, `token_type`, `expires_at` e os dados do usuári
 O e-mail de recuperação envia um JWT assinado (HS256), válido por 60 minutos e de uso único. O identificador interno do JWT é armazenado em hash e apagado após a redefinição, impedindo que o mesmo link seja reutilizado. Configure uma chave forte em `JWT_SECRET` no `.env` de produção.
 
 O link usa o deep link `alugacrajubar://reset-password`. Configure o mesmo esquema no app Flutter e, se necessário, altere `MOBILE_RESET_PASSWORD_URL` no `.env`.
+
+Para alterar a senha de uma sessão autenticada, o Flutter envia a senha atual e a nova senha para `POST /auth/change-password`. A API envia uma confirmação para `MOBILE_CONFIRM_PASSWORD_CHANGE_URL`; somente `POST /auth/confirm-password-change` com o JWT recebido aplica a alteração. A nova senha nunca é colocada no JWT, a confirmação expira em 30 minutos, pode ser usada uma única vez e encerra todas as sessões existentes.

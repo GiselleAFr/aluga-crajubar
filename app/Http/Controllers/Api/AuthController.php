@@ -3,15 +3,20 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ChangePasswordRequest;
+use App\Http\Requests\ConfirmPasswordChangeRequest;
 use App\Http\Requests\ForgotPasswordRequest;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\ResetPasswordRequest;
 use App\Models\User;
+use App\Notifications\PasswordChangeConfirmationNotification;
 use App\Notifications\PasswordResetJwtNotification;
+use App\Services\PasswordChangeConfirmationService;
 use App\Services\PasswordResetJwtService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -50,6 +55,38 @@ class AuthController extends Controller
         request()->user()->currentAccessToken()?->delete();
 
         return response()->json(['message' => 'Sessão encerrada com sucesso.']);
+    }
+
+    public function changePassword(ChangePasswordRequest $request, PasswordChangeConfirmationService $passwordChange): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! Hash::check($request->string('current_password')->toString(), $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['A senha atual está incorreta.'],
+            ]);
+        }
+
+        $user->notify(new PasswordChangeConfirmationNotification(
+            $passwordChange->create($user, $request->string('password')->toString()),
+        ));
+
+        return response()->json([
+            'message' => 'Enviamos um e-mail para confirmar a alteração da sua senha.',
+        ], 202);
+    }
+
+    public function confirmPasswordChange(
+        ConfirmPasswordChangeRequest $request,
+        PasswordChangeConfirmationService $passwordChange,
+    ): JsonResponse {
+        if (! $passwordChange->confirm($request->string('token')->toString())) {
+            return response()->json(['message' => 'O link de confirmação é inválido ou expirou.'], 422);
+        }
+
+        return response()->json([
+            'message' => 'Senha alterada com sucesso. Faça login novamente.',
+        ]);
     }
 
     public function forgotPassword(ForgotPasswordRequest $request, PasswordResetJwtService $passwordReset): JsonResponse
