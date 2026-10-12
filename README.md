@@ -29,6 +29,9 @@ URL base local: `http://SEU-IP:8000/api`. Nas chamadas autenticadas envie `Autho
 | Definir nova senha | `POST /auth/reset-password` | `email`, `token`, `password`, `password_confirmation` |
 | Solicitar alteração de senha | `POST /auth/change-password` | `current_password`, `password`, `password_confirmation` |
 | Confirmar alteração de senha | `POST /auth/confirm-password-change` | `token` |
+| Dados do perfil | `GET /auth/profile` | — |
+| Editar perfil | `PATCH /auth/profile` | `name`, `email`, `phone` (envie ao menos um campo) |
+| Histórico de hospedagens | `GET /auth/profile/stays` | `per_page` (opcional, máximo 50) |
 | Usuário logado | `GET /auth/me` | — |
 | Sair | `POST /auth/logout` | — |
 
@@ -52,3 +55,5 @@ O e-mail de recuperação envia um JWT assinado (HS256), válido por 60 minutos 
 O link usa o deep link `alugacrajubar://reset-password`. Configure o mesmo esquema no app Flutter e, se necessário, altere `MOBILE_RESET_PASSWORD_URL` no `.env`.
 
 Para alterar a senha de uma sessão autenticada, o Flutter envia a senha atual e a nova senha para `POST /auth/change-password`. A API envia uma confirmação para `MOBILE_CONFIRM_PASSWORD_CHANGE_URL`; somente `POST /auth/confirm-password-change` com o JWT recebido aplica a alteração. A nova senha nunca é colocada no JWT, a confirmação expira em 30 minutos, pode ser usada uma única vez e encerra todas as sessões existentes.
+
+As rotas de perfil exigem Bearer token. `GET /auth/profile` fornece os dados para o card de perfil e a contagem de hospedagens concluídas. `GET /auth/profile/stays` retorna somente as hospedagens do usuário autenticado, em ordem da mais recente para a mais antiga e com paginação. A tabela `bookings` foi criada para registrar esse histórico e será preenchida pelo futuro fluxo de reservas.
