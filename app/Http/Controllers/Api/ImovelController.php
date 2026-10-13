@@ -3,18 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\SearchImovelRequest;
 use App\Models\Imovel;
 use Illuminate\Http\Request;
 
 class ImovelController extends Controller
 {
-    public function index(Request $request)
+    public function index(SearchImovelRequest $request)
     {
         $query = Imovel::query();
 
-        // Pesquisa por título, descrição ou localização
-        if ($request->filled('busca')) {
-            $busca = $request->busca;
+        // Busca textual por título, descrição ou localização
+        if ($request->filled('q')) {
+            $busca = $request->input('q');
 
             $query->where(function ($q) use ($busca) {
                 $q->where('titulo', 'like', "%{$busca}%")
@@ -24,53 +25,84 @@ class ImovelController extends Controller
             });
         }
 
-        // Filtros
-        $query->when($request->filled('tipo'), function ($q) use ($request) {
-            $q->where('tipo', $request->tipo);
-        });
+        // Filtro por tipo de imóvel
+        if ($request->filled('tipo')) {
+            $tipos = explode(',', $request->input('tipo'));
 
-        $query->when($request->filled('finalidade'), function ($q) use ($request) {
-            $q->where('finalidade', $request->finalidade);
-        });
-
-        $query->when($request->filled('cidade'), function ($q) use ($request) {
-            $q->where('cidade', 'like', '%' . $request->cidade . '%');
-        });
-
-        $query->when($request->filled('preco_min'), function ($q) use ($request) {
-            $q->where('preco', '>=', $request->preco_min);
-        });
-
-        $query->when($request->filled('preco_max'), function ($q) use ($request) {
-            $q->where('preco', '<=', $request->preco_max);
-        });
-
-        // Ordenação com campos permitidos
-        $ordenacoes = [
-            'preco',
-            'titulo',
-            'created_at',
-            'area',
-        ];
-
-        $ordenarPor = $request->query('ordenar_por', 'created_at');
-        $direcao = $request->query('direcao', 'desc');
-
-        if (! in_array($ordenarPor, $ordenacoes, true)) {
-            return response()->json([
-                'message' => 'Campo de ordenação inválido.',
-            ], 422);
+            $query->whereIn('tipo', $tipos);
         }
 
-        if (! in_array($direcao, ['asc', 'desc'], true)) {
-            return response()->json([
-                'message' => 'Direção de ordenação inválida.',
-            ], 422);
+        // Filtro por finalidade
+        $query->when(
+            $request->filled('finalidade'),
+            function ($q) use ($request) {
+                $q->where('finalidade', $request->input('finalidade'));
+            }
+        );
+
+        // Filtro por cidade
+        $query->when(
+            $request->filled('cidade'),
+            function ($q) use ($request) {
+                $q->where('cidade', 'like', '%' . $request->input('cidade') . '%');
+            }
+        );
+
+        // Filtro por bairro
+        $query->when(
+            $request->filled('bairro'),
+            function ($q) use ($request) {
+                $q->where('bairro', 'like', '%' . $request->input('bairro') . '%');
+            }
+        );
+
+        // Filtro por preço mínimo
+        $query->when(
+            $request->filled('preco_min'),
+            function ($q) use ($request) {
+                $q->where('preco', '>=', $request->input('preco_min'));
+            }
+        );
+
+        // Filtro por preço máximo
+        $query->when(
+            $request->filled('preco_max'),
+            function ($q) use ($request) {
+                $q->where('preco', '<=', $request->input('preco_max'));
+            }
+        );
+
+        // Filtro por quantidade mínima de quartos
+        $query->when(
+            $request->filled('quartos'),
+            function ($q) use ($request) {
+                $q->where('quartos', '>=', $request->integer('quartos'));
+            }
+        );
+
+        // Ordenação dos imóveis
+        $ordenacao = $request->input('ordenacao', 'mais_recentes');
+
+        switch ($ordenacao) {
+            case 'menor_preco':
+                $query->orderBy('preco', 'asc');
+                break;
+
+            case 'maior_preco':
+                $query->orderBy('preco', 'desc');
+                break;
+
+            case 'mais_recentes':
+            default:
+                $query->orderBy('created_at', 'desc');
+                break;
         }
+
+        // Quantidade de resultados por página
+        $perPage = $request->integer('per_page', 15);
 
         $imoveis = $query
-            ->orderBy($ordenarPor, $direcao)
-            ->paginate(15)
+            ->paginate($perPage)
             ->withQueryString();
 
         return response()->json($imoveis);
