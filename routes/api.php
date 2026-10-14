@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\ImovelController;
+use App\Http\Controllers\FavoritoController;
 
 Route::prefix('auth')->group(function (): void {
     Route::post('/register', [AuthController::class, 'register']);
@@ -17,3 +18,9 @@ Route::prefix('auth')->group(function (): void {
 });
 
 Route::apiResource('imoveis', ImovelController::class);
+Route::middleware('auth:sanctum')->prefix('favoritos')->group(function (): void {
+    Route::get('/', [FavoritoController::class, 'listar']);
+    Route::get('/pesquisar', [FavoritoController::class, 'pesquisar']);
+    Route::post('/{imovel}', [FavoritoController::class, 'adicionar']);
+    Route::delete('/{imovel}', [FavoritoController::class, 'remover']);
+});

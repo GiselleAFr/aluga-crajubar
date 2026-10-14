@@ -16,7 +16,8 @@ class SearchImovelRequest extends FormRequest
         return [
             'q' => 'nullable|string|max:255',               // Busca textual (ex: "casa para alugar", "quarto em pousada")
             'tipo' => 'nullable|string',                    // Ex: "casa", "apartamento", "quarto", "pousada" ou múltiplos separados por vírgula
-            'finalidade' => 'nullable|string|in:aluguel,venda,diaria',
+            'finalidade' => 'nullable|string|in:aluguel,venda',
+            'periodo_locacao' => 'nullable|string|in:diaria,mensal',
             'preco_min' => 'nullable|numeric|min:0',
             'preco_max' => 'nullable|numeric|min:0',
             'preco_dia_max' => 'nullable|numeric|min:0',    // Para buscas do tipo "até 100/dia"
