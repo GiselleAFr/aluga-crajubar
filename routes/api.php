@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\PropertyLocationController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function (): void {
@@ -20,3 +21,6 @@ Route::prefix('auth')->group(function (): void {
         Route::get('/profile/stays', [ProfileController::class, 'stays']);
     });
 });
+
+Route::get('/maps/geocode', [PropertyLocationController::class, 'geocode'])->middleware('throttle:30,1');
+Route::get('/properties/{property}/location', [PropertyLocationController::class, 'show']);
