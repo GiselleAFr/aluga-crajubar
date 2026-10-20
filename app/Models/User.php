@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use App\Models\Imovel;
 
 class User extends Authenticatable
 {
@@ -57,6 +58,17 @@ class User extends Authenticatable
     public function isLandlord(): bool
     {
         return $this->role === UserRole::LANDLORD;
+    }
+
+
+    public function favoritos()
+    {
+        return $this->belongsToMany(
+            Imovel::class,
+            'favoritos',
+            'user_id',
+            'imovel_id'
+        )->withTimestamps();
     }
 
     public function isAdmin(): bool

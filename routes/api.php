@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Admin\LandlordRequestController as AdminLandlordRequestController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ImovelController;
+use App\Http\Controllers\FavoritoController;
 use App\Http\Controllers\Api\LandlordRequestController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\NotificationPreferenceController;
@@ -26,31 +27,40 @@ Route::prefix('auth')->group(function (): void {
     });
 });
 
-// Solicitação para se tornar locador (usuário autenticado).
+// Solicitação para se tornar locador e notificações.
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/landlord-request', [LandlordRequestController::class, 'show']);
     Route::post('/landlord-request', [LandlordRequestController::class, 'store'])->middleware('throttle:5,1');
 
-    // Preferências de notificação (#49): sempre do próprio usuário autenticado.
+    // Preferências de notificação.
     Route::get('/notification-preferences', [NotificationPreferenceController::class, 'index']);
     Route::patch('/notification-preferences', [NotificationPreferenceController::class, 'update']);
 
-    // Caixa de entrada (#50): também restrita ao próprio usuário.
+    // Caixa de entrada.
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->whereUuid('notification');
 });
 
-// Análise das solicitações (somente administradores).
+// Análise das solicitações: somente administradores.
 Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin'])->group(function (): void {
     Route::get('/landlord-requests', [AdminLandlordRequestController::class, 'index']);
     Route::post('/landlord-requests/{landlordRequest}/approve', [AdminLandlordRequestController::class, 'approve']);
     Route::post('/landlord-requests/{landlordRequest}/reject', [AdminLandlordRequestController::class, 'reject']);
 });
 
-// Consulta continua pública; escrita exige login e papel de locador.
+// Consulta pública de imóveis.
 Route::apiResource('imoveis', ImovelController::class)->only(['index', 'show']);
 
+// Escrita de imóveis restrita a locadores autenticados.
 Route::middleware(['auth:sanctum', 'role:landlord'])->group(function (): void {
     Route::apiResource('imoveis', ImovelController::class)->only(['store', 'update', 'destroy']);
+});
+
+// Favoritos: somente usuários autenticados.
+Route::middleware('auth:sanctum')->prefix('favoritos')->group(function (): void {
+    Route::get('/', [FavoritoController::class, 'listar']);
+    Route::get('/pesquisar', [FavoritoController::class, 'pesquisar']);
+    Route::post('/{imovel}', [FavoritoController::class, 'adicionar']);
+    Route::delete('/{imovel}', [FavoritoController::class, 'remover']);
 });

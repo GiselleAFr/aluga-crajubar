@@ -3,7 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\User;
 
+/**
+ * @property int $id
+ * @property string $finalidade
+ * @property int|null $user_id
+ */
 class Imovel extends Model
 {
     protected $table = 'imoveis';
@@ -13,6 +19,7 @@ class Imovel extends Model
         'descricao',
         'tipo',
         'finalidade',
+        'periodo_locacao',
         'preco',
         'cidade',
         'bairro',
@@ -30,5 +37,15 @@ class Imovel extends Model
             'quartos' => 'integer',
             'banheiros' => 'integer',
         ];
+    }
+
+    public function usuariosFavoritaram()
+    {
+        return $this->belongsToMany(
+            User::class,
+            'favoritos',
+            'imovel_id',
+            'user_id'
+        )->withTimestamps();
     }
 }

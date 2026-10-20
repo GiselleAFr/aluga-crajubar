@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\SearchImovelRequest;
 use App\Models\Imovel;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ImovelController extends Controller
 {
@@ -40,6 +41,13 @@ class ImovelController extends Controller
             }
         );
 
+        $query->when(
+            $request->filled('periodo_locacao'),
+            function ($q) use ($request) {
+                $q->where('periodo_locacao', $request->input('periodo_locacao'));
+            }
+        );
+
         // Filtro por cidade
         $query->when(
             $request->filled('cidade'),
@@ -69,6 +77,15 @@ class ImovelController extends Controller
             $request->filled('preco_max'),
             function ($q) use ($request) {
                 $q->where('preco', '<=', $request->input('preco_max'));
+            }
+        );
+
+        $query->when(
+            $request->filled('preco_dia_max'),
+            function ($q) use ($request) {
+                $q->where('finalidade', 'aluguel')
+                    ->where('periodo_locacao', 'diaria')
+                    ->where('preco', '<=', $request->input('preco_dia_max'));
             }
         );
 
@@ -115,6 +132,12 @@ class ImovelController extends Controller
             'descricao' => ['nullable', 'string'],
             'tipo' => ['required', 'in:casa,apartamento,terreno,comercial,outro'],
             'finalidade' => ['required', 'in:venda,aluguel'],
+            'periodo_locacao' => [
+                'required_if:finalidade,aluguel',
+                'prohibited_if:finalidade,venda',
+                'nullable',
+                'in:diaria,mensal',
+            ],
             'preco' => ['required', 'numeric', 'min:0'],
             'cidade' => ['required', 'string', 'max:255'],
             'bairro' => ['required', 'string', 'max:255'],
@@ -146,6 +169,12 @@ class ImovelController extends Controller
             'descricao' => ['sometimes', 'nullable', 'string'],
             'tipo' => ['sometimes', 'required', 'in:casa,apartamento,terreno,comercial,outro'],
             'finalidade' => ['sometimes', 'required', 'in:venda,aluguel'],
+            'periodo_locacao' => [
+                Rule::requiredIf(fn () => $request->has('finalidade') && $request->input('finalidade') === 'aluguel'),
+                Rule::prohibitedIf(fn () => $request->input('finalidade', $imovel->finalidade) === 'venda'),
+                'nullable',
+                'in:diaria,mensal',
+            ],
             'preco' => ['sometimes', 'required', 'numeric', 'min:0'],
             'cidade' => ['sometimes', 'required', 'string', 'max:255'],
             'bairro' => ['sometimes', 'required', 'string', 'max:255'],
@@ -154,6 +183,10 @@ class ImovelController extends Controller
             'banheiros' => ['sometimes', 'integer', 'min:0'],
             'area' => ['sometimes', 'nullable', 'numeric', 'min:0'],
         ]);
+
+        if (($dados['finalidade'] ?? $imovel->finalidade) === 'venda') {
+            $dados['periodo_locacao'] = null;
+        }
 
         $imovel->update($dados);
 
