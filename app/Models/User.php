@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\NotificationType;
 use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -76,5 +77,22 @@ class User extends Authenticatable
     public function latestLandlordRequest(): HasOne
     {
         return $this->hasOne(LandlordRequest::class)->latestOfMany();
+    }
+
+    public function notificationPreferences(): HasMany
+    {
+        return $this->hasMany(NotificationPreference::class);
+    }
+
+    /**
+     * Sem linha gravada vale o padrão do tipo. Consulta o banco a cada chamada (sem cache em memória).
+     */
+    public function wantsNotification(NotificationType $type): bool
+    {
+        $enabled = $this->notificationPreferences()
+            ->where('type', $type->value)
+            ->value('enabled');
+
+        return $enabled === null ? $type->defaultEnabled() : (bool) $enabled;
     }
 }

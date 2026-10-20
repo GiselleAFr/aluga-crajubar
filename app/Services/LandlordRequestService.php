@@ -6,9 +6,13 @@ use App\Enums\LandlordRequestStatus;
 use App\Enums\UserRole;
 use App\Models\LandlordRequest;
 use App\Models\User;
+use App\Notifications\LandlordRequestApprovedNotification;
+use App\Notifications\LandlordRequestRejectedNotification;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class LandlordRequestService
 {
@@ -58,7 +62,7 @@ class LandlordRequestService
      */
     public function approve(LandlordRequest $landlordRequest, User $reviewer): LandlordRequest
     {
-        return DB::transaction(function () use ($landlordRequest, $reviewer): LandlordRequest {
+        $approved = DB::transaction(function () use ($landlordRequest, $reviewer): LandlordRequest {
             $locked = $this->lockPending($landlordRequest);
 
             $applicant = User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
@@ -79,6 +83,10 @@ class LandlordRequestService
 
             return $locked;
         });
+
+        $this->notifyApplicant($approved->user, new LandlordRequestApprovedNotification($approved->id));
+
+        return $approved;
     }
 
     /**
@@ -86,7 +94,7 @@ class LandlordRequestService
      */
     public function reject(LandlordRequest $landlordRequest, User $reviewer, ?string $reason = null): LandlordRequest
     {
-        return DB::transaction(function () use ($landlordRequest, $reviewer, $reason): LandlordRequest {
+        $rejected = DB::transaction(function () use ($landlordRequest, $reviewer, $reason): LandlordRequest {
             $locked = $this->lockPending($landlordRequest);
 
             $locked->forceFill([
@@ -98,6 +106,13 @@ class LandlordRequestService
 
             return $locked;
         });
+
+        $this->notifyApplicant(
+            $rejected->user,
+            new LandlordRequestRejectedNotification($rejected->id, $rejected->rejection_reason),
+        );
+
+        return $rejected;
     }
 
     /**
@@ -112,6 +127,19 @@ class LandlordRequestService
         }
 
         return $locked;
+    }
+
+    /**
+     * Roda DEPOIS do commit. Uma falha ao notificar é registrada no log, mas não pode
+     * transformar em erro uma decisão que já foi gravada com sucesso.
+     */
+    private function notifyApplicant(User $applicant, Notification $notification): void
+    {
+        try {
+            $applicant->notify($notification);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 
     private function error(string $message): ValidationException
