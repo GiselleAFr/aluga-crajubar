@@ -7,6 +7,7 @@ use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -57,9 +58,23 @@ class User extends Authenticatable
         return $this->role === UserRole::LANDLORD;
     }
 
+    public function isAdmin(): bool
+    {
+        return $this->role === UserRole::ADMIN;
+    }
+
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class);
     }
 
+    public function landlordRequests(): HasMany
+    {
+        return $this->hasMany(LandlordRequest::class);
+    }
+
+    public function latestLandlordRequest(): HasOne
+    {
+        return $this->hasOne(LandlordRequest::class)->latestOfMany();
+    }
 }

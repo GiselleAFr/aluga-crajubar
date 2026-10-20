@@ -19,6 +19,7 @@ class UserProfileResource extends JsonResource
             'role' => $this->role->value,
             'is_landlord' => $this->isLandlord(),
             'available_tabs' => $this->isLandlord() ? ['cliente', 'locador'] : ['cliente'],
+            'landlord_request_status' => $this->latestLandlordRequest?->status->value,
             'created_at' => $this->created_at?->toISOString(),
         ];
     }
