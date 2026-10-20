@@ -3,9 +3,12 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\NotificationType;
 use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -57,6 +60,7 @@ class User extends Authenticatable
         return $this->role === UserRole::LANDLORD;
     }
 
+
     public function favoritos()
     {
         return $this->belongsToMany(
@@ -65,5 +69,42 @@ class User extends Authenticatable
             'user_id',
             'imovel_id'
         )->withTimestamps();
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === UserRole::ADMIN;
+    }
+
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class);
+    }
+
+    public function landlordRequests(): HasMany
+    {
+        return $this->hasMany(LandlordRequest::class);
+    }
+
+    public function latestLandlordRequest(): HasOne
+    {
+        return $this->hasOne(LandlordRequest::class)->latestOfMany();
+    }
+
+    public function notificationPreferences(): HasMany
+    {
+        return $this->hasMany(NotificationPreference::class);
+    }
+
+    /**
+     * Sem linha gravada vale o padrão do tipo. Consulta o banco a cada chamada (sem cache em memória).
+     */
+    public function wantsNotification(NotificationType $type): bool
+    {
+        $enabled = $this->notificationPreferences()
+            ->where('type', $type->value)
+            ->value('enabled');
+
+        return $enabled === null ? $type->defaultEnabled() : (bool) $enabled;
     }
 }
