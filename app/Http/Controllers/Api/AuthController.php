@@ -128,7 +128,7 @@ class AuthController extends Controller
         ]);
     }
 
-    private function userData(User $user): array
+        private function userData(User $user): array
     {
         return [
             ...$user->only(['id', 'name', 'email', 'phone', 'created_at']),
@@ -136,6 +136,8 @@ class AuthController extends Controller
             'is_landlord' => $user->isLandlord(),
             // O Flutter deve exibir a aba "Locador" somente se ela estiver presente nesta lista.
             'available_tabs' => $user->isLandlord() ? ['cliente', 'locador'] : ['cliente'],
+            // null (nunca solicitou), pending, approved ou rejected.
+            'landlord_request_status' => $user->latestLandlordRequest?->status->value,
         ];
     }
 }

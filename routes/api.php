@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\LandlordRequestController as AdminLandlordRequestController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ImovelController;
+use App\Http\Controllers\Api\LandlordRequestController;
 use App\Http\Controllers\Api\ProfileController;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\ImovelController;
 
 Route::prefix('auth')->group(function (): void {
     Route::post('/register', [AuthController::class, 'register']);
@@ -22,4 +24,22 @@ Route::prefix('auth')->group(function (): void {
     });
 });
 
-Route::apiResource('imoveis', ImovelController::class);
+// Solicitação para se tornar locador (usuário autenticado).
+Route::middleware('auth:sanctum')->group(function (): void {
+    Route::get('/landlord-request', [LandlordRequestController::class, 'show']);
+    Route::post('/landlord-request', [LandlordRequestController::class, 'store'])->middleware('throttle:5,1');
+});
+
+// Análise das solicitações (somente administradores).
+Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin'])->group(function (): void {
+    Route::get('/landlord-requests', [AdminLandlordRequestController::class, 'index']);
+    Route::post('/landlord-requests/{landlordRequest}/approve', [AdminLandlordRequestController::class, 'approve']);
+    Route::post('/landlord-requests/{landlordRequest}/reject', [AdminLandlordRequestController::class, 'reject']);
+});
+
+// Consulta continua pública; escrita exige login e papel de locador.
+Route::apiResource('imoveis', ImovelController::class)->only(['index', 'show']);
+
+Route::middleware(['auth:sanctum', 'role:landlord'])->group(function (): void {
+    Route::apiResource('imoveis', ImovelController::class)->only(['store', 'update', 'destroy']);
+});
