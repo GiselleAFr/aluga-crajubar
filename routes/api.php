@@ -4,6 +4,8 @@ use App\Http\Controllers\Api\Admin\LandlordRequestController as AdminLandlordReq
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ImovelController;
 use App\Http\Controllers\Api\LandlordRequestController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\NotificationPreferenceController;
 use App\Http\Controllers\Api\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -28,6 +30,15 @@ Route::prefix('auth')->group(function (): void {
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/landlord-request', [LandlordRequestController::class, 'show']);
     Route::post('/landlord-request', [LandlordRequestController::class, 'store'])->middleware('throttle:5,1');
+
+    // Preferências de notificação (#49): sempre do próprio usuário autenticado.
+    Route::get('/notification-preferences', [NotificationPreferenceController::class, 'index']);
+    Route::patch('/notification-preferences', [NotificationPreferenceController::class, 'update']);
+
+    // Caixa de entrada (#50): também restrita ao próprio usuário.
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->whereUuid('notification');
 });
 
 // Análise das solicitações (somente administradores).
