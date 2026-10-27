@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\User;
+use App\Models\Booking;
 
 /**
  * @property int $id
@@ -47,5 +49,10 @@ class Imovel extends Model
             'imovel_id',
             'user_id'
         )->withTimestamps();
+    }
+
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class, 'imovel_id');
     }
 }

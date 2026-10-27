@@ -2,12 +2,13 @@
 
 use App\Http\Controllers\Api\Admin\LandlordRequestController as AdminLandlordRequestController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\ImovelController;
-use App\Http\Controllers\FavoritoController;
 use App\Http\Controllers\Api\LandlordRequestController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\NotificationPreferenceController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\FavoritoController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function (): void {
@@ -63,4 +64,13 @@ Route::middleware('auth:sanctum')->prefix('favoritos')->group(function (): void 
     Route::get('/pesquisar', [FavoritoController::class, 'pesquisar']);
     Route::post('/{imovel}', [FavoritoController::class, 'adicionar']);
     Route::delete('/{imovel}', [FavoritoController::class, 'remover']);
+});
+
+// Reservas: somente usuários autenticados.
+Route::middleware('auth:sanctum')->prefix('bookings')->group(function (): void {
+    Route::post('/', [BookingController::class, 'store']);
+    Route::get('/', [BookingController::class, 'index']);
+    Route::get('/disponibilidade', [BookingController::class, 'disponibilidade']);
+    Route::get('/{booking}/status', [BookingController::class, 'status']);
+    Route::get('/{booking}', [BookingController::class, 'show']);
 });
