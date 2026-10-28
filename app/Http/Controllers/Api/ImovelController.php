@@ -41,6 +41,7 @@ class ImovelController extends Controller
             }
         );
 
+        // Filtro por período de locação
         $query->when(
             $request->filled('periodo_locacao'),
             function ($q) use ($request) {
@@ -80,6 +81,7 @@ class ImovelController extends Controller
             }
         );
 
+        // Filtro por preço máximo da diária
         $query->when(
             $request->filled('preco_dia_max'),
             function ($q) use ($request) {
@@ -147,7 +149,10 @@ class ImovelController extends Controller
             'area' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $imovel = Imovel::create($dados);
+        // Cria o imóvel e atribui o proprietário autenticado explicitamente
+        $imovel = new Imovel($dados);
+        $imovel->user_id = $request->user()->id;
+        $imovel->save();
 
         return response()->json([
             'message' => 'Imóvel cadastrado com sucesso.',
@@ -170,8 +175,13 @@ class ImovelController extends Controller
             'tipo' => ['sometimes', 'required', 'in:casa,apartamento,terreno,comercial,outro'],
             'finalidade' => ['sometimes', 'required', 'in:venda,aluguel'],
             'periodo_locacao' => [
-                Rule::requiredIf(fn () => $request->has('finalidade') && $request->input('finalidade') === 'aluguel'),
-                Rule::prohibitedIf(fn () => $request->input('finalidade', $imovel->finalidade) === 'venda'),
+                Rule::requiredIf(
+                    fn () => $request->has('finalidade')
+                        && $request->input('finalidade') === 'aluguel'
+                ),
+                Rule::prohibitedIf(
+                    fn () => $request->input('finalidade', $imovel->finalidade) === 'venda'
+                ),
                 'nullable',
                 'in:diaria,mensal',
             ],

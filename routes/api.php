@@ -1,3 +1,4 @@
+
 <?php
 
 use App\Http\Controllers\Api\Admin\LandlordRequestController as AdminLandlordRequestController;
@@ -40,7 +41,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
     // Caixa de entrada.
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
-    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->whereUuid('notification');
+    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])
+        ->whereUuid('notification');
 });
 
 // Análise das solicitações: somente administradores.
@@ -68,9 +70,18 @@ Route::middleware('auth:sanctum')->prefix('favoritos')->group(function (): void 
 
 // Reservas: somente usuários autenticados.
 Route::middleware('auth:sanctum')->prefix('bookings')->group(function (): void {
+    // Gestão das solicitações recebidas pelos imóveis do locatário.
+    Route::middleware('role:landlord')->group(function (): void {
+        Route::get('/solicitacoes', [BookingController::class, 'solicitacoes']);
+        Route::patch('/{booking}/confirmar', [BookingController::class, 'confirmar']);
+        Route::patch('/{booking}/recusar', [BookingController::class, 'recusar']);
+    });
+
+    // Solicitações e consultas do usuário.
     Route::post('/', [BookingController::class, 'store']);
     Route::get('/', [BookingController::class, 'index']);
     Route::get('/disponibilidade', [BookingController::class, 'disponibilidade']);
+    Route::patch('/{booking}/cancelar', [BookingController::class, 'cancelar']);
     Route::get('/{booking}/status', [BookingController::class, 'status']);
     Route::get('/{booking}', [BookingController::class, 'show']);
 });

@@ -8,11 +8,12 @@ use App\Models\Imovel;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class BookingController extends Controller
 {
     /**
-     * Criar uma reserva.
+     * Solicitar uma reserva.
      */
     public function store(Request $request)
     {
@@ -26,14 +27,12 @@ class BookingController extends Controller
 
         $imovel = Imovel::findOrFail($validated['imovel_id']);
 
-        // Imóveis à venda não aceitam reservas.
         if ($imovel->finalidade !== 'aluguel') {
             return response()->json([
                 'message' => 'Este imóvel não está disponível para reserva.',
             ], 422);
         }
 
-        // A modalidade escolhida precisa corresponder ao imóvel.
         if ($imovel->periodo_locacao !== $validated['modalidade']) {
             return response()->json([
                 'message' => 'A modalidade escolhida não corresponde à modalidade cadastrada para este imóvel.',
@@ -51,7 +50,6 @@ class BookingController extends Controller
         $checkOut = Carbon::parse($validated['check_out']);
 
         if ($validated['modalidade'] === 'mensal') {
-            // A reserva mensal deve terminar na mesma data do mês.
             $dataEsperada = $checkIn->copy()->addMonthNoOverflow();
 
             while ($dataEsperada->lt($checkOut)) {
@@ -64,7 +62,6 @@ class BookingController extends Controller
                 ], 422);
             }
 
-            // Calcula a quantidade de meses completos.
             $meses = 0;
             $dataAtual = $checkIn->copy();
 
@@ -75,7 +72,6 @@ class BookingController extends Controller
 
             $valorTotal = (float) $imovel->preco * $meses;
         } else {
-            // Na modalidade diária, cada dia é cobrado separadamente.
             $dias = $checkIn->diffInDays($checkOut);
 
             if ($dias < 1) {
@@ -87,7 +83,6 @@ class BookingController extends Controller
             $valorTotal = (float) $imovel->preco * $dias;
         }
 
-        // Impede reservas com períodos sobrepostos.
         $conflito = Booking::where('imovel_id', $imovel->id)
             ->whereIn('status', ['confirmed', 'pending'])
             ->where('check_in', '<', $validated['check_out'])
@@ -96,7 +91,7 @@ class BookingController extends Controller
 
         if ($conflito) {
             return response()->json([
-                'message' => 'O imóvel já possui uma reserva para esse período.',
+                'message' => 'O imóvel já possui uma reserva ou solicitação para esse período.',
             ], 409);
         }
 
@@ -110,11 +105,11 @@ class BookingController extends Controller
             'guests' => $validated['guests'],
             'total_amount' => $valorTotal,
             'currency' => 'BRL',
-            'status' => 'confirmed',
+            'status' => 'pending',
         ]);
 
         return response()->json([
-            'message' => 'Reserva criada com sucesso.',
+            'message' => 'Solicitação de reserva enviada. Aguarde a análise do locador.',
             'booking' => $booking,
         ], 201);
     }
@@ -133,7 +128,142 @@ class BookingController extends Controller
     }
 
     /**
-     * Visualizar os detalhes de uma reserva.
+     * Listar solicitações dos imóveis do locatário autenticado.
+     */
+    public function solicitacoes(Request $request)
+    {
+        $bookings = Booking::whereHas('imovel', function ($query) use ($request) {
+            $query->where('user_id', $request->user()->id);
+        })
+            ->with('user:id,name,email,phone', 'imovel')
+            ->where('status', 'pending')
+            ->orderByDesc('created_at')
+            ->paginate(10);
+
+        return response()->json($bookings);
+    }
+
+    /**
+     * Confirmar uma solicitação de reserva.
+     */
+    public function confirmar(Request $request, Booking $booking)
+    {
+        $booking->loadMissing('imovel');
+
+        if (
+            !$booking->imovel
+            || $booking->imovel->user_id !== $request->user()->id
+        ) {
+            return response()->json([
+                'message' => 'Solicitação de reserva não encontrada.',
+            ], 404);
+        }
+
+        if ($booking->status !== 'pending') {
+            return response()->json([
+                'message' => 'Somente solicitações pendentes podem ser confirmadas.',
+            ], 422);
+        }
+
+        $resultado = DB::transaction(function () use ($booking) {
+            $reserva = Booking::whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($reserva->status !== 'pending') {
+                return [
+                    'error' => 'Somente solicitações pendentes podem ser confirmadas.',
+                    'code' => 422,
+                ];
+            }
+
+            $conflito = Booking::where('imovel_id', $reserva->imovel_id)
+                ->where('id', '<>', $reserva->id)
+                ->where('status', 'confirmed')
+                ->where('check_in', '<', $reserva->check_out)
+                ->where('check_out', '>', $reserva->check_in)
+                ->exists();
+
+            if ($conflito) {
+                return [
+                    'error' => 'Já existe uma reserva confirmada para esse período.',
+                    'code' => 409,
+                ];
+            }
+
+            $reserva->update([
+                'status' => 'confirmed',
+            ]);
+
+            return [
+                'booking' => $reserva->fresh()->load('imovel'),
+            ];
+        });
+
+        if (isset($resultado['error'])) {
+            return response()->json([
+                'message' => $resultado['error'],
+            ], $resultado['code']);
+        }
+
+        return response()->json([
+            'message' => 'Reserva confirmada com sucesso.',
+            'booking' => $resultado['booking'],
+        ]);
+    }
+
+    /**
+     * Recusar uma solicitação de reserva.
+     */
+    public function recusar(Request $request, Booking $booking)
+    {
+        $booking->loadMissing('imovel');
+
+        if (
+            !$booking->imovel
+            || $booking->imovel->user_id !== $request->user()->id
+        ) {
+            return response()->json([
+                'message' => 'Solicitação de reserva não encontrada.',
+            ], 404);
+        }
+
+        if ($booking->status !== 'pending') {
+            return response()->json([
+                'message' => 'Somente solicitações pendentes podem ser recusadas.',
+            ], 422);
+        }
+
+        $atualizada = DB::transaction(function () use ($booking) {
+            $reserva = Booking::whereKey($booking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($reserva->status !== 'pending') {
+                return false;
+            }
+
+            $reserva->update([
+                'status' => 'rejected',
+            ]);
+
+            return $reserva->fresh()->load('imovel');
+        });
+
+        if ($atualizada === false) {
+            return response()->json([
+                'message' => 'Esta solicitação já foi processada.',
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Solicitação de reserva recusada.',
+            'booking' => $atualizada,
+        ]);
+    }
+
+    /**
+     * Visualizar os detalhes de uma reserva própria.
      */
     public function show(Request $request, Booking $booking)
     {
@@ -149,7 +279,7 @@ class BookingController extends Controller
     }
 
     /**
-     * Consultar o status de uma reserva.
+     * Consultar o status de uma reserva própria.
      */
     public function status(Request $request, Booking $booking)
     {
@@ -162,6 +292,45 @@ class BookingController extends Controller
         return response()->json([
             'booking_id' => $booking->id,
             'status' => $booking->status,
+        ]);
+    }
+
+    /**
+     * Cancelar uma reserva própria antes do início da estadia.
+     */
+    public function cancelar(Request $request, Booking $booking)
+    {
+        if ($booking->user_id !== $request->user()->id) {
+            return response()->json([
+                'message' => 'Reserva não encontrada.',
+            ], 404);
+        }
+
+        if ($booking->status === 'cancelled') {
+            return response()->json([
+                'message' => 'Esta reserva já foi cancelada.',
+            ], 422);
+        }
+
+        if (Carbon::parse($booking->check_in)->startOfDay()->lte(now()->startOfDay())) {
+            return response()->json([
+                'message' => 'Não é possível cancelar uma reserva cuja data de entrada já chegou ou passou.',
+            ], 422);
+        }
+
+        if (!in_array($booking->status, ['confirmed', 'pending'], true)) {
+            return response()->json([
+                'message' => 'Esta reserva não pode ser cancelada no status atual.',
+            ], 422);
+        }
+
+        $booking->update([
+            'status' => 'cancelled',
+        ]);
+
+        return response()->json([
+            'message' => 'Reserva cancelada com sucesso.',
+            'booking' => $booking->fresh(),
         ]);
     }
 
