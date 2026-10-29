@@ -11,6 +11,8 @@ class Booking extends Model
     use HasFactory;
 
     protected $fillable = [
+        'user_id',
+        'imovel_id',
         'property_name',
         'city',
         'check_in',
@@ -34,5 +36,10 @@ class Booking extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function imovel(): BelongsTo
+    {
+        return $this->belongsTo(Imovel::class, 'imovel_id');
     }
 }

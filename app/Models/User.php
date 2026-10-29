@@ -60,7 +60,6 @@ class User extends Authenticatable
         return $this->role === UserRole::LANDLORD;
     }
 
-
     public function favoritos()
     {
         return $this->belongsToMany(
@@ -74,6 +73,11 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === UserRole::ADMIN;
+    }
+
+    public function imoveis(): HasMany
+    {
+        return $this->hasMany(Imovel::class, 'user_id');
     }
 
     public function bookings(): HasMany
@@ -97,7 +101,8 @@ class User extends Authenticatable
     }
 
     /**
-     * Sem linha gravada vale o padrão do tipo. Consulta o banco a cada chamada (sem cache em memória).
+     * Sem linha gravada vale o padrão do tipo.
+     * Consulta o banco a cada chamada (sem cache em memória).
      */
     public function wantsNotification(NotificationType $type): bool
     {
@@ -105,6 +110,8 @@ class User extends Authenticatable
             ->where('type', $type->value)
             ->value('enabled');
 
-        return $enabled === null ? $type->defaultEnabled() : (bool) $enabled;
+        return $enabled === null
+            ? $type->defaultEnabled()
+            : (bool) $enabled;
     }
 }
