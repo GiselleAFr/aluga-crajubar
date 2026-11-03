@@ -32,6 +32,8 @@ class Imovel extends Model
         'quartos',
         'banheiros',
         'area',
+        'latitude',
+        'longitude',
     ];
 
     protected function casts(): array
@@ -41,6 +43,8 @@ class Imovel extends Model
             'area' => 'decimal:2',
             'quartos' => 'integer',
             'banheiros' => 'integer',
+            'latitude' => 'float',
+            'longitude' => 'float',
         ];
     }
 

@@ -1,4 +1,3 @@
-
 <?php
 
 use App\Http\Controllers\Api\Admin\LandlordRequestController as AdminLandlordRequestController;
@@ -26,6 +25,7 @@ Route::prefix('auth')->group(function (): void {
         Route::get('/profile', [ProfileController::class, 'show']);
         Route::patch('/profile', [ProfileController::class, 'update']);
         Route::get('/profile/stays', [ProfileController::class, 'stays']);
+        Route::get('/profile/active-stay', [ProfileController::class, 'activeStay']);
     });
 });
 

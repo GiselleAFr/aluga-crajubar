@@ -50,6 +50,48 @@ class ProfileController extends Controller
         ]);
     }
 
+    
+    public function activeStay(Request $request): JsonResponse
+    {
+        $today = now()->toDateString();
+
+        $booking = $request->user()->bookings()
+            ->with('imovel')
+            ->where('status', 'confirmed')
+            ->whereDate('check_in', '<=', $today)
+            ->whereDate('check_out', '>', $today)
+            ->orderByDesc('check_in')
+            ->first();
+
+        if (!$booking) {
+            return response()->json([
+                'has_active_stay' => false,
+                'stay' => null,
+            ]);
+        }
+
+        $imovel = $booking->imovel;
+
+        return response()->json([
+            'has_active_stay' => true,
+            'stay' => [
+                'id' => $booking->id,
+                'imovel_id' => $booking->imovel_id,
+                'property_name' => $imovel?->titulo ?? $booking->property_name,
+                'city' => $imovel?->cidade ?? $booking->city,
+                'bairro' => $imovel?->bairro,
+                'address' => $imovel?->endereco,
+                'latitude' => $imovel?->latitude,
+                'longitude' => $imovel?->longitude,
+                'check_in' => $booking->check_in?->format('Y-m-d'),
+                'check_out' => $booking->check_out?->format('Y-m-d'),
+                'guests' => $booking->guests,
+                'status' => $booking->status,
+            ],
+        ]);
+    }
+
+
     private function stayData(Booking $booking): array
     {
         return [
