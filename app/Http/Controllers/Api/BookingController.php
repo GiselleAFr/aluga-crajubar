@@ -119,10 +119,16 @@ class BookingController extends Controller
      */
     public function index(Request $request)
     {
+        $request->validate([
+            'status' => ['nullable', Rule::in(['pending', 'confirmed', 'rejected', 'cancelled'])],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ]);
+
         $bookings = Booking::where('user_id', $request->user()->id)
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
             ->with('imovel')
             ->orderByDesc('created_at')
-            ->paginate(10);
+            ->paginate($request->integer('per_page', 10));
 
         return response()->json($bookings);
     }

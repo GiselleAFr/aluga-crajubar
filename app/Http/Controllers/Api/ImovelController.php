@@ -15,15 +15,26 @@ class ImovelController extends Controller
         $query = Imovel::query();
 
         // Busca textual por título, descrição ou localização
+        // Busca textual: ignora maiúsculas/minúsculas e aceita várias palavras
         if ($request->filled('q')) {
-            $busca = $request->input('q');
+            $palavras = preg_split(
+                '/\s+/',
+                mb_strtolower(trim($request->input('q'))),
+                -1,
+                PREG_SPLIT_NO_EMPTY
+            );
 
-            $query->where(function ($q) use ($busca) {
-                $q->where('titulo', 'like', "%{$busca}%")
-                    ->orWhere('descricao', 'like', "%{$busca}%")
-                    ->orWhere('cidade', 'like', "%{$busca}%")
-                    ->orWhere('bairro', 'like', "%{$busca}%");
-            });
+            foreach ($palavras as $palavra) {
+                $termo = '%' . addcslashes($palavra, '%_\\') . '%';
+
+                $query->where(function ($q) use ($termo) {
+                    $q->whereRaw('LOWER(titulo) LIKE ?', [$termo])
+                        ->orWhereRaw('LOWER(descricao) LIKE ?', [$termo])
+                        ->orWhereRaw('LOWER(cidade) LIKE ?', [$termo])
+                        ->orWhereRaw('LOWER(bairro) LIKE ?', [$termo])
+                        ->orWhereRaw('LOWER(tipo) LIKE ?', [$termo]);
+                });
+            }
         }
 
         // Filtro por tipo de imóvel
@@ -49,21 +60,17 @@ class ImovelController extends Controller
             }
         );
 
+
         // Filtro por cidade
-        $query->when(
-            $request->filled('cidade'),
-            function ($q) use ($request) {
-                $q->where('cidade', 'like', '%' . $request->input('cidade') . '%');
-            }
-        );
+        $query->when($request->filled('cidade'), function ($q) use ($request) {
+            $q->whereRaw('LOWER(cidade) LIKE ?', ['%' . mb_strtolower($request->input('cidade')) . '%']);
+        });
 
         // Filtro por bairro
-        $query->when(
-            $request->filled('bairro'),
-            function ($q) use ($request) {
-                $q->where('bairro', 'like', '%' . $request->input('bairro') . '%');
-            }
-        );
+        $query->when($request->filled('bairro'), function ($q) use ($request) {
+            $q->whereRaw('LOWER(bairro) LIKE ?', ['%' . mb_strtolower($request->input('bairro')) . '%']);
+        });
+
 
         // Filtro por preço mínimo
         $query->when(
