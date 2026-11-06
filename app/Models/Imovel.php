@@ -19,6 +19,8 @@ class Imovel extends Model
     use HasFactory;
     protected $table = 'imoveis';
 
+    protected $with = ['proprietario:id,name,phone'];
+
     protected $fillable = [
         'titulo',
         'descricao',
