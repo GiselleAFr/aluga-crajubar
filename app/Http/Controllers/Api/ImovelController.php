@@ -118,6 +118,12 @@ class ImovelController extends Controller
                 $query->orderBy('preco', 'desc');
                 break;
 
+            case 'mais_favoritados':
+                $query->withCount('usuariosFavoritaram')
+                    ->orderByDesc('usuarios_favoritaram_count')
+                    ->orderByDesc('created_at');
+                break;
+
             case 'mais_recentes':
             default:
                 $query->orderBy('created_at', 'desc');

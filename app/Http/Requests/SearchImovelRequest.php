@@ -24,7 +24,7 @@ class SearchImovelRequest extends FormRequest
             'cidade' => 'nullable|string|max:100',
             'bairro' => 'nullable|string|max:100',
             'quartos' => 'nullable|integer|min:0',
-            'ordenacao' => 'nullable|string|in:mais_recentes,menor_preco,maior_preco',
+            'ordenacao' => 'nullable|string|in:mais_recentes,menor_preco,maior_preco,mais_favoritados',
             'per_page' => 'nullable|integer|min:1|max:100', // Paginação para o app Flutter
         ];
     }
