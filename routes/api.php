@@ -22,6 +22,8 @@ Route::prefix('auth')->group(function (): void {
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/change-password', [AuthController::class, 'changePassword'])->middleware('throttle:3,1');
+        Route::post('/change-password/verify-code', [AuthController::class, 'verifyPasswordChangeCode'])->middleware('throttle:6,1,password-change-verify');
+        Route::post('/change-password/resend-code', [AuthController::class, 'resendPasswordChangeCode'])->middleware('throttle:3,1,password-change-resend');
         Route::get('/profile', [ProfileController::class, 'show']);
         Route::patch('/profile', [ProfileController::class, 'update']);
         Route::get('/profile/stays', [ProfileController::class, 'stays']);

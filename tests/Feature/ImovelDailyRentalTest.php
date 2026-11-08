@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Imovel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
+use App\Models\User;
+use Laravel\Sanctum\Sanctum;
 
 class ImovelDailyRentalTest extends TestCase
 {
@@ -12,6 +14,8 @@ class ImovelDailyRentalTest extends TestCase
 
     public function test_daily_rental_requires_a_period_and_is_stored_as_rent(): void
     {
+        Sanctum::actingAs(User::factory()->landlord()->create());
+        
         $this->postJson('/api/imoveis', $this->imovelData(['periodo_locacao' => 'diaria']))
             ->assertCreated()
             ->assertJsonPath('data.finalidade', 'aluguel')

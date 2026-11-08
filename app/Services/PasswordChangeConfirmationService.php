@@ -12,27 +12,42 @@ use Throwable;
 
 class PasswordChangeConfirmationService
 {
+    /** Tentativas de código incorreto antes de invalidar a solicitação. */
+    public const MAX_CODE_ATTEMPTS = 5;
+
+    /**
+     * Mantido por compatibilidade: devolve apenas o JWT do link de confirmação.
+     */
     public function create(User $user, string $newPassword): string
     {
-        $now = now();
-        $jti = Str::random(64);
+        return $this->issue($user, $newPassword)['token'];
+    }
 
-        DB::table('password_change_confirmations')->updateOrInsert(
-            ['email' => $user->email],
-            [
-                'token' => Hash::make($jti),
-                'password' => Hash::make($newPassword),
-                'created_at' => $now,
-            ],
-        );
+    /**
+     * Registra a solicitação pendente e devolve o JWT (link) e o código de 6 dígitos (e-mail).
+     * A nova senha fica apenas em hash; nunca vai no JWT nem no código.
+     *
+     * @return array{token: string, code: string}
+     */
+    public function issue(User $user, string $newPassword): array
+    {
+        return $this->store($user, Hash::make($newPassword));
+    }
 
-        return JWT::encode([
-            'sub' => $user->email,
-            'purpose' => 'password_change_confirmation',
-            'jti' => $jti,
-            'iat' => $now->timestamp,
-            'exp' => $now->copy()->addMinutes(config('jwt.password_change_ttl'))->timestamp,
-        ], $this->secret(), 'HS256');
+    /**
+     * Gera novo link e novo código para a solicitação pendente do usuário, sem pedir a senha de novo.
+     *
+     * @return array{token: string, code: string}|null null quando não há solicitação pendente válida
+     */
+    public function reissue(User $user): ?array
+    {
+        $record = DB::table('password_change_confirmations')->where('email', $user->email)->first();
+
+        if (! $record || $this->isExpired($record->created_at)) {
+            return null;
+        }
+
+        return $this->store($user, $record->password);
     }
 
     public function confirm(string $token): bool
@@ -56,22 +71,106 @@ class PasswordChangeConfirmationService
                 return false;
             }
 
-            $user = User::where('email', $email)->first();
+            return $this->apply($email, $record->password);
+        });
+    }
 
-            if (! $user) {
+    /**
+     * Confirma a alteração com o código de 6 dígitos digitado no app pelo usuário autenticado.
+     */
+    public function confirmWithCode(User $user, string $code): bool
+    {
+        return DB::transaction(function () use ($user, $code): bool {
+            $record = DB::table('password_change_confirmations')
+                ->where('email', $user->email)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $record || $record->code === null) {
                 return false;
             }
 
-            DB::table('users')->where('id', $user->id)->update([
-                'password' => $record->password,
-                'remember_token' => Str::random(60),
-                'updated_at' => now(),
-            ]);
-            $user->tokens()->delete();
-            DB::table('password_change_confirmations')->where('email', $email)->delete();
+            if ($this->isExpired($record->created_at) || $record->attempts >= self::MAX_CODE_ATTEMPTS) {
+                DB::table('password_change_confirmations')->where('email', $user->email)->delete();
 
-            return true;
+                return false;
+            }
+
+            if (! Hash::check($code, $record->code)) {
+                DB::table('password_change_confirmations')
+                    ->where('email', $user->email)
+                    ->increment('attempts');
+
+                return false;
+            }
+
+            return $this->apply($user->email, $record->password);
         });
+    }
+
+    /**
+     * @return array{token: string, code: string}
+     */
+    private function store(User $user, string $hashedPassword): array
+    {
+        $now = now();
+        $jti = Str::random(64);
+        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+        DB::table('password_change_confirmations')->updateOrInsert(
+            ['email' => $user->email],
+            [
+                'token' => Hash::make($jti),
+                'code' => Hash::make($code),
+                'attempts' => 0,
+                'password' => $hashedPassword,
+                'created_at' => $now,
+            ],
+        );
+
+        $token = JWT::encode([
+            'sub' => $user->email,
+            'purpose' => 'password_change_confirmation',
+            'jti' => $jti,
+            'iat' => $now->timestamp,
+            'exp' => $now->copy()->addMinutes(config('jwt.password_change_ttl'))->timestamp,
+        ], $this->secret(), 'HS256');
+
+        return ['token' => $token, 'code' => $code];
+    }
+
+    /**
+     * Aplica a nova senha, encerra todas as sessões e consome a solicitação (uso único).
+     * Deve ser chamado dentro de uma transação, com o registro já bloqueado.
+     */
+    private function apply(string $email, string $hashedPassword): bool
+    {
+        $user = User::where('email', $email)->first();
+
+        if (! $user) {
+            return false;
+        }
+
+        DB::table('users')->where('id', $user->id)->update([
+            'password' => $hashedPassword,
+            'remember_token' => Str::random(60),
+            'updated_at' => now(),
+        ]);
+        $user->tokens()->delete();
+        DB::table('password_change_confirmations')->where('email', $email)->delete();
+
+        return true;
+    }
+
+    private function isExpired(?string $createdAt): bool
+    {
+        if ($createdAt === null) {
+            return true;
+        }
+
+        return now()->greaterThan(
+            \Illuminate\Support\Carbon::parse($createdAt)->addMinutes((int) config('jwt.password_change_ttl'))
+        );
     }
 
     private function secret(): string

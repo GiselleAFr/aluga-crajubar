@@ -14,6 +14,7 @@ use App\Notifications\PasswordChangeConfirmationNotification;
 use App\Notifications\PasswordResetJwtNotification;
 use App\Services\PasswordChangeConfirmationService;
 use App\Services\PasswordResetJwtService;
+use App\Http\Requests\VerifyPasswordChangeCodeRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -67,9 +68,9 @@ class AuthController extends Controller
             ]);
         }
 
-        $user->notify(new PasswordChangeConfirmationNotification(
-            $passwordChange->create($user, $request->string('password')->toString()),
-        ));
+                $confirmation = $passwordChange->issue($user, $request->string('password')->toString());
+
+        $user->notify(new PasswordChangeConfirmationNotification($confirmation['token'], $confirmation['code']));
 
         return response()->json([
             'message' => 'Enviamos um e-mail para confirmar a alteração da sua senha.',
@@ -89,6 +90,36 @@ class AuthController extends Controller
         ]);
     }
 
+
+        public function verifyPasswordChangeCode(
+        VerifyPasswordChangeCodeRequest $request,
+        PasswordChangeConfirmationService $passwordChange,
+    ): JsonResponse {
+        if (! $passwordChange->confirmWithCode($request->user(), $request->string('code')->toString())) {
+            return response()->json(['message' => 'O código é inválido ou expirou.'], 422);
+        }
+
+        return response()->json([
+            'message' => 'Senha alterada com sucesso. Faça login novamente.',
+        ]);
+    }
+
+    public function resendPasswordChangeCode(PasswordChangeConfirmationService $passwordChange): JsonResponse
+    {
+        $user = request()->user();
+        $confirmation = $passwordChange->reissue($user);
+
+        if (! $confirmation) {
+            return response()->json([
+                'message' => 'Não há alteração de senha pendente. Solicite a alteração novamente.',
+            ], 422);
+        }
+
+        $user->notify(new PasswordChangeConfirmationNotification($confirmation['token'], $confirmation['code']));
+
+        return response()->json(['message' => 'Enviamos um novo código para o seu e-mail.'], 202);
+    }
+    
     public function forgotPassword(ForgotPasswordRequest $request, PasswordResetJwtService $passwordReset): JsonResponse
     {
         $user = User::where('email', $request->string('email')->toString())->first();
