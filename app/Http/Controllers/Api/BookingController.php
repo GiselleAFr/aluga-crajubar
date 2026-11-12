@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use App\Models\User;
+use App\Notifications\BookingUpdateNotification;
 
 class BookingController extends Controller
 {
@@ -108,10 +110,22 @@ class BookingController extends Controller
             'status' => 'pending',
         ]);
 
+        $this->notificar($imovel->proprietario, $booking, 'requested');
+
         return response()->json([
             'message' => 'Solicitação de reserva enviada. Aguarde a análise do locador.',
             'booking' => $booking,
         ], 201);
+    }
+
+    private function notificar(?User $destinatario, Booking $booking, string $evento): void
+    {
+        if (! $destinatario) return;
+        try {
+            $destinatario->notify(BookingUpdateNotification::fromBooking($booking, $evento));
+        } catch (\Throwable $e) {
+            report($e); // um aviso que falha não pode derrubar a reserva
+        }
     }
 
     /**
@@ -212,6 +226,8 @@ class BookingController extends Controller
             ], $resultado['code']);
         }
 
+        $this->notificar($resultado['booking']->user, $resultado['booking'], 'confirmed');
+
         return response()->json([
             'message' => 'Reserva confirmada com sucesso.',
             'booking' => $resultado['booking'],
@@ -261,6 +277,8 @@ class BookingController extends Controller
                 'message' => 'Esta solicitação já foi processada.',
             ], 422);
         }
+
+        $this->notificar($atualizada->user, $atualizada, 'rejected');
 
         return response()->json([
             'message' => 'Solicitação de reserva recusada.',
@@ -333,6 +351,8 @@ class BookingController extends Controller
         $booking->update([
             'status' => 'cancelled',
         ]);
+
+        $this->notificar($booking->imovel?->proprietario, $booking->fresh(), 'cancelled');
 
         return response()->json([
             'message' => 'Reserva cancelada com sucesso.',

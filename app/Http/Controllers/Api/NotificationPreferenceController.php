@@ -10,15 +10,26 @@ use Illuminate\Http\Request;
 
 class NotificationPreferenceController extends Controller
 {
+    /**
+     * Todas as preferências do usuário autenticado (com o padrão do tipo quando nunca alteradas).
+     */
     public function index(Request $request, NotificationPreferenceService $service): JsonResponse
     {
-        return response()->json(['data' => $service->all($request->user())]);
+        return response()->json([
+            'data' => $service->all($request->user()),
+        ]);
     }
 
-    public function update(UpdateNotificationPreferencesRequest $request, NotificationPreferenceService $service): JsonResponse
-    {
+    /**
+     * Grava uma ou mais preferências do PRÓPRIO usuário.
+     * Corpo: {"preferences": [{"type": "push", "enabled": false}]}
+     */
+    public function update(
+        UpdateNotificationPreferencesRequest $request,
+        NotificationPreferenceService $service,
+    ): JsonResponse {
         return response()->json([
-            'message' => 'Preferências de notificação atualizadas com sucesso.',
+            'message' => 'Preferências de notificação atualizadas.',
             'data' => $service->update($request->user(), $request->validated('preferences')),
         ]);
     }
