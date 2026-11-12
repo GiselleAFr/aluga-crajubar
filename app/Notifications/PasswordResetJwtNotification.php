@@ -21,8 +21,12 @@ class PasswordResetJwtNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $url = rtrim((string) env('MOBILE_RESET_PASSWORD_URL', 'alugacrajubar://reset-password'), '?')
-            .'?'.http_build_query(['token' => $this->token, 'email' => $notifiable->email]);
+                $params = http_build_query(['token' => $this->token, 'email' => $notifiable->email]);
+        $webUrl = (string) config('jwt.reset_web_url');
+
+        $url = $webUrl !== ''
+            ? rtrim($webUrl, '#?').'#'.$params
+            : rtrim((string) config('jwt.reset_deep_link'), '?').'?'.$params;
 
         return (new MailMessage)
             ->subject('Recuperação de senha')
