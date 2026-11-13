@@ -172,9 +172,21 @@ class PasswordRecoveryApiTest extends TestCase
         $login = $this->postJson('/api/auth/login', ['email' => $user->email, 'password' => self::NEW_PASSWORD]);
         $login->assertOk();
         $this->assertArrayHasKey('access_token', $login->json());
+    }
+
+    public function test_used_token_cannot_be_reused(): void
+    {
+        $user = $this->userWithOldPassword();
+        $token = app(PasswordResetJwtService::class)->create($user);
 
         $this->postJson('/api/auth/reset-password', $this->payload($user->email, $token))
-            ->assertUnprocessable();
+            ->assertOk();
+
+        // Atenção: as rotas com throttle:3,1 compartilham o contador por IP; nos testes,
+        // mantenha no máximo 3 chamadas a elas por teste.
+        $this->postJson('/api/auth/reset-password', $this->payload($user->email, $token))
+            ->assertUnprocessable()
+            ->assertJsonPath('message', self::INVALID_LINK_MESSAGE);
     }
 
     public function test_email_delivery_failure_does_not_reveal_that_the_account_exists(): void
