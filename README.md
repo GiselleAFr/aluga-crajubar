@@ -57,3 +57,47 @@ O link usa o deep link `alugacrajubar://reset-password`. Configure o mesmo esque
 Para alterar a senha de uma sessão autenticada, o Flutter envia a senha atual e a nova senha para `POST /auth/change-password`. A API envia uma confirmação para `MOBILE_CONFIRM_PASSWORD_CHANGE_URL`; somente `POST /auth/confirm-password-change` com o JWT recebido aplica a alteração. A nova senha nunca é colocada no JWT, a confirmação expira em 30 minutos, pode ser usada uma única vez e encerra todas as sessões existentes.
 
 As rotas de perfil exigem Bearer token. `GET /auth/profile` fornece os dados para o card de perfil e a contagem de hospedagens concluídas. `GET /auth/profile/stays` retorna somente as hospedagens do usuário autenticado, em ordem da mais recente para a mais antiga e com paginação. A tabela `bookings` foi criada para registrar esse histórico e será preenchida pelo futuro fluxo de reservas.
+
+## Recuperação de senha por e-mail: configuração e teste
+
+Fluxo: o app chama `POST /auth/forgot-password` (a resposta é a mesma exista a conta ou não), o usuário recebe um e-mail com um link, o link abre o app na tela de nova senha e o app chama `POST /auth/reset-password`. O token vale `JWT_TTL` minutos, é de uso único e um novo pedido invalida o anterior.
+
+### Link do e-mail
+
+Alguns clientes de e-mail (como o Gmail) não abrem links com esquema próprio (`alugacrajubar://`). Por isso o e-mail pode apontar para uma página `https` deste back-end, que abre o app: defina `PASSWORD_RESET_WEB_URL=https://seu-endereco/reset-password`. A página é `GET /reset-password`; o token vai depois do `#`, que o navegador não envia ao servidor. Sem essa variável, o e-mail usa direto o deep link `MOBILE_RESET_PASSWORD_URL`.
+
+O endereço precisa ser alcançável pelo celular. Em teste local, use o IP do computador na mesma rede (`http://192.168.x.x:8000/reset-password`, com `php artisan serve --host=0.0.0.0 --port=8000`) ou um túnel (ngrok, Cloudflare Tunnel). Em uso real, o back-end precisa estar hospedado com `https`.
+
+### Envio real de e-mails
+
+Em desenvolvimento o padrão é `MAIL_MAILER=log`: nada é enviado e o e-mail fica em `storage/logs/laravel.log`. Para enviar de verdade, use SMTP com um provedor de plano gratuito (confira os limites atuais no site dele).
+
+Exemplo com Gmail (precisa de verificação em duas etapas e de uma **senha de app**, criada em Conta Google → Segurança → Senhas de app):
+
+```
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=seu-email@gmail.com
+MAIL_PASSWORD=senha-de-app-gerada-no-google
+MAIL_FROM_ADDRESS=seu-email@gmail.com
+MAIL_FROM_NAME="Aluga Crajubar"
+```
+
+Outras opções: Brevo (`smtp-relay.brevo.com`, porta 587, login SMTP e chave SMTP do painel; o remetente precisa ser verificado) e Mailtrap (caixa de testes que captura os e-mails sem entregá-los). Na porta 465, acrescente `MAIL_SCHEME=smtps`.
+
+Depois de editar o `.env`, rode `php artisan config:clear` e reinicie o `php artisan serve`. **Nunca versione o `.env` nem coloque credenciais reais em arquivos do repositório.** Se o envio falhar, a API continua respondendo a mensagem neutra e o erro fica em `storage/logs/laravel.log`.
+
+### Testar sem depender do e-mail
+
+```
+php artisan tinker
+>>> $u = App\Models\User::where('email', 'usuario@exemplo.com')->first();
+>>> app(App\Services\PasswordResetJwtService::class)->create($u);
+```
+
+Abra o resultado no emulador Android (PowerShell):
+
+```
+adb shell am start -a android.intent.action.VIEW -d "alugacrajubar://reset-password?token=TOKEN&email=usuario@exemplo.com"
+```

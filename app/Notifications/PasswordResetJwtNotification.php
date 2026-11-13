@@ -21,9 +21,11 @@ class PasswordResetJwtNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-                $params = http_build_query(['token' => $this->token, 'email' => $notifiable->email]);
+        $params = http_build_query(['token' => $this->token, 'email' => $notifiable->email]);
         $webUrl = (string) config('jwt.reset_web_url');
 
+        // Com a página web configurada, o e-mail traz um link https (clicável em qualquer cliente
+        // de e-mail) que abre o app. O token vai no fragmento (#), que não é enviado ao servidor.
         $url = $webUrl !== ''
             ? rtrim($webUrl, '#?').'#'.$params
             : rtrim((string) config('jwt.reset_deep_link'), '?').'?'.$params;

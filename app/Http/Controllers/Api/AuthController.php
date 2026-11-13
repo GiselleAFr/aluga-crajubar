@@ -125,7 +125,13 @@ class AuthController extends Controller
         $user = User::where('email', $request->string('email')->toString())->first();
 
         if ($user) {
-            $user->notify(new PasswordResetJwtNotification($passwordReset->create($user)));
+            try {
+                $user->notify(new PasswordResetJwtNotification($passwordReset->create($user)));
+            } catch (\Throwable $e) {
+                // Falha no envio (ex.: SMTP fora do ar) não pode mudar a resposta, senão revelaria
+                // que o e-mail tem conta. O erro fica registrado no log.
+                report($e);
+            }
         }
 
         // A mesma resposta evita revelar se um e-mail possui conta.
