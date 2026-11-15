@@ -10,7 +10,9 @@ use App\Models\LandlordRequest;
 use App\Services\LandlordRequestService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LandlordRequestController extends Controller
 {
@@ -36,6 +38,29 @@ class LandlordRequestController extends Controller
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
             ],
+        ]);
+    }
+
+    public function document(LandlordRequest $landlordRequest, string $side): StreamedResponse
+    {
+        abort_unless($landlordRequest->status === LandlordRequestStatus::PENDING, 404);
+
+        $path = match ($side) {
+            'front' => $landlordRequest->document_front_path,
+            'back' => $landlordRequest->document_back_path,
+            default => null,
+        };
+        $disk = Storage::disk('local');
+
+        abort_unless(is_string($path) && $disk->exists($path), 404);
+
+        $mimeType = $disk->mimeType($path);
+        abort_unless(in_array($mimeType, ['image/jpeg', 'image/png'], true), 404);
+
+        return $disk->response($path, basename($path), [
+            'Content-Type' => $mimeType,
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store',
         ]);
     }
 

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\Admin\LandlordRequestController as AdminLandlordReq
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\ImovelController;
+use App\Http\Controllers\Api\ImovelFotoController;
 use App\Http\Controllers\Api\LandlordRequestController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\NotificationPreferenceController;
@@ -50,16 +51,27 @@ Route::middleware('auth:sanctum')->group(function (): void {
 // Análise das solicitações: somente administradores.
 Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin'])->group(function (): void {
     Route::get('/landlord-requests', [AdminLandlordRequestController::class, 'index']);
+    Route::get('/landlord-requests/{landlordRequest}/documents/{side}', [AdminLandlordRequestController::class, 'document'])
+        ->whereIn('side', ['front', 'back'])
+        ->name('admin.landlord-requests.documents.show');
     Route::post('/landlord-requests/{landlordRequest}/approve', [AdminLandlordRequestController::class, 'approve']);
     Route::post('/landlord-requests/{landlordRequest}/reject', [AdminLandlordRequestController::class, 'reject']);
 });
 
 // Consulta pública de imóveis.
-Route::apiResource('imoveis', ImovelController::class)->only(['index', 'show']);
+Route::apiResource('imoveis', ImovelController::class)
+    ->only(['index', 'show'])
+    ->parameters(['imoveis' => 'imovel']);
 
 // Escrita de imóveis restrita a locadores autenticados.
 Route::middleware(['auth:sanctum', 'role:landlord'])->group(function (): void {
-    Route::apiResource('imoveis', ImovelController::class)->only(['store', 'update', 'destroy']);
+    Route::get('/landlord/imoveis', [ImovelController::class, 'landlordIndex']);
+    Route::post('/imoveis/{imovel}/fotos', [ImovelFotoController::class, 'store']);
+    Route::patch('/imoveis/{imovel}/fotos/{foto}/principal', [ImovelFotoController::class, 'setCover']);
+    Route::delete('/imoveis/{imovel}/fotos/{foto}', [ImovelFotoController::class, 'destroy']);
+    Route::apiResource('imoveis', ImovelController::class)
+        ->only(['store', 'update', 'destroy'])
+        ->parameters(['imoveis' => 'imovel']);
 });
 
 // Favoritos: somente usuários autenticados.

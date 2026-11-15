@@ -18,6 +18,16 @@ class LandlordRequest extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'full_name',
+        'cpf',
+        'birth_date',
+        'document_type',
+        'email',
+        'primary_phone',
+        'secondary_phone',
+        'commercial_phone',
+        'document_front_path',
+        'document_back_path',
         'message',
     ];
 
@@ -25,6 +35,7 @@ class LandlordRequest extends Model
     {
         return [
             'status' => LandlordRequestStatus::class,
+            'birth_date' => 'date',
             'reviewed_at' => 'datetime',
         ];
     }

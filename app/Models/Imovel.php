@@ -6,18 +6,22 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\User;
-use App\Models\Booking;
 
 /**
  * @property int $id
  * @property string $finalidade
+ * @property string $status
  * @property int|null $user_id
  */
 class Imovel extends Model
 {
     use HasFactory;
+
     protected $table = 'imoveis';
+
+    protected $attributes = [
+        'status' => 'available',
+    ];
 
     protected $with = ['proprietario:id,name,phone'];
 
@@ -36,6 +40,7 @@ class Imovel extends Model
         'area',
         'latitude',
         'longitude',
+        'status',
     ];
 
     protected function casts(): array
@@ -63,6 +68,11 @@ class Imovel extends Model
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class, 'imovel_id');
+    }
+
+    public function fotos(): HasMany
+    {
+        return $this->hasMany(ImovelFoto::class, 'imovel_id');
     }
 
     public function proprietario(): BelongsTo

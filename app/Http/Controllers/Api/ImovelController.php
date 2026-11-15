@@ -4,15 +4,20 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SearchImovelRequest;
+use App\Http\Resources\ImovelResource;
 use App\Models\Imovel;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use RuntimeException;
 
 class ImovelController extends Controller
 {
+    private const STATUSES = ['available', 'rented', 'unavailable'];
+
     public function index(SearchImovelRequest $request)
     {
-        $query = Imovel::query();
+        $query = Imovel::query()->with('fotos');
 
         // Busca textual por título, descrição ou localização
         // Busca textual: ignora maiúsculas/minúsculas e aceita várias palavras
@@ -137,6 +142,25 @@ class ImovelController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
+        $imoveis->through(fn (Imovel $imovel) => (new ImovelResource($imovel))->resolve());
+
+        return response()->json($imoveis);
+    }
+
+    public function landlordIndex(Request $request)
+    {
+        $filters = $request->validate([
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $imoveis = Imovel::query()
+            ->with('fotos')
+            ->where('user_id', $request->user()->id)
+            ->orderByDesc('created_at')
+            ->paginate($filters['per_page'] ?? 15);
+
+        $imoveis->through(fn (Imovel $imovel) => (new ImovelResource($imovel))->resolve());
+
         return response()->json($imoveis);
     }
 
@@ -160,28 +184,34 @@ class ImovelController extends Controller
             'quartos' => ['sometimes', 'integer', 'min:0'],
             'banheiros' => ['sometimes', 'integer', 'min:0'],
             'area' => ['nullable', 'numeric', 'min:0'],
+            'status' => ['sometimes', Rule::in(self::STATUSES)],
         ]);
 
         // Cria o imóvel e atribui o proprietário autenticado explicitamente
         $imovel = new Imovel($dados);
         $imovel->user_id = $request->user()->id;
         $imovel->save();
+        $imovel->load('fotos');
 
         return response()->json([
             'message' => 'Imóvel cadastrado com sucesso.',
-            'data' => $imovel,
+            'data' => new ImovelResource($imovel),
         ], 201);
     }
 
     public function show(Imovel $imovel)
     {
+        $imovel->load('fotos');
+
         return response()->json([
-            'data' => $imovel,
+            'data' => new ImovelResource($imovel),
         ]);
     }
 
     public function update(Request $request, Imovel $imovel)
     {
+        $this->ensureOwner($request, $imovel);
+
         $dados = $request->validate([
             'titulo' => ['sometimes', 'required', 'string', 'max:255'],
             'descricao' => ['sometimes', 'nullable', 'string'],
@@ -205,6 +235,7 @@ class ImovelController extends Controller
             'quartos' => ['sometimes', 'integer', 'min:0'],
             'banheiros' => ['sometimes', 'integer', 'min:0'],
             'area' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'status' => ['sometimes', Rule::in(self::STATUSES)],
         ]);
 
         if (($dados['finalidade'] ?? $imovel->finalidade) === 'venda') {
@@ -215,16 +246,30 @@ class ImovelController extends Controller
 
         return response()->json([
             'message' => 'Imóvel atualizado com sucesso.',
-            'data' => $imovel->fresh(),
+            'data' => new ImovelResource($imovel->fresh()->load('fotos')),
         ]);
     }
 
-    public function destroy(Imovel $imovel)
+    public function destroy(Request $request, Imovel $imovel)
     {
+        $this->ensureOwner($request, $imovel);
+
+        foreach ($imovel->fotos()->get()->groupBy('disk') as $disk => $fotos) {
+            $deleted = Storage::disk($disk)->delete($fotos->pluck('path')->all());
+            if (! $deleted) {
+                throw new RuntimeException('Não foi possível excluir as fotos do imóvel.');
+            }
+        }
+
         $imovel->delete();
 
         return response()->json([
             'message' => 'Imóvel excluído com sucesso.',
         ]);
+    }
+
+    private function ensureOwner(Request $request, Imovel $imovel): void
+    {
+        abort_unless((int) $imovel->user_id === (int) $request->user()->id, 404);
     }
 }
