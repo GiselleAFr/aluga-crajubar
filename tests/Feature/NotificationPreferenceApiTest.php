@@ -24,7 +24,7 @@ class NotificationPreferenceApiTest extends TestCase
         $this->patchJson('/api/notification-preferences', [])->assertUnauthorized();
     }
 
-    public function test_new_user_has_every_type_enabled_by_default(): void
+    public function test_new_user_gets_the_default_for_every_type(): void
     {
         Sanctum::actingAs(User::factory()->create());
 
@@ -36,7 +36,7 @@ class NotificationPreferenceApiTest extends TestCase
             $response
                 ->assertJsonPath("data.{$index}.type", $type->value)
                 ->assertJsonPath("data.{$index}.label", $type->label())
-                ->assertJsonPath("data.{$index}.enabled", true);
+                ->assertJsonPath("data.{$index}.enabled", $type->defaultEnabled());
         }
     }
 
@@ -45,19 +45,17 @@ class NotificationPreferenceApiTest extends TestCase
         $user = User::factory()->create();
         Sanctum::actingAs($user);
 
-        $this->patchJson('/api/notification-preferences', [
+        $data = $this->patchJson('/api/notification-preferences', [
             'preferences' => [['type' => 'landlord_request_approved', 'enabled' => false]],
-        ])
-            ->assertOk()
-            ->assertJsonPath('data.0.type', 'landlord_request_approved')
-            ->assertJsonPath('data.0.enabled', false)
-            ->assertJsonPath('data.1.type', 'landlord_request_rejected')
-            ->assertJsonPath('data.1.enabled', true);
+        ])->assertOk()->json('data');
 
-        $this->getJson('/api/notification-preferences')
-            ->assertOk()
-            ->assertJsonPath('data.0.enabled', false)
-            ->assertJsonPath('data.1.enabled', true);
+        $this->assertFalse($this->enabledOf($data, 'landlord_request_approved'));
+        $this->assertTrue($this->enabledOf($data, 'landlord_request_rejected'));
+
+        $data = $this->getJson('/api/notification-preferences')->assertOk()->json('data');
+
+        $this->assertFalse($this->enabledOf($data, 'landlord_request_approved'));
+        $this->assertTrue($this->enabledOf($data, 'landlord_request_rejected'));
 
         // Só o tipo alterado vira linha; o restante continua no padrão.
         $this->assertDatabaseCount('notification_preferences', 1);
@@ -77,9 +75,11 @@ class NotificationPreferenceApiTest extends TestCase
             'preferences' => [['type' => 'landlord_request_rejected', 'enabled' => false]],
         ])->assertOk();
 
-        $this->patchJson('/api/notification-preferences', [
+        $data = $this->patchJson('/api/notification-preferences', [
             'preferences' => [['type' => 'landlord_request_rejected', 'enabled' => true]],
-        ])->assertOk()->assertJsonPath('data.1.enabled', true);
+        ])->assertOk()->json('data');
+
+        $this->assertTrue($this->enabledOf($data, 'landlord_request_rejected'));
 
         $this->assertDatabaseCount('notification_preferences', 1);
         $this->assertTrue($user->wantsNotification(NotificationType::LANDLORD_REQUEST_REJECTED));
@@ -90,15 +90,15 @@ class NotificationPreferenceApiTest extends TestCase
         $user = User::factory()->create();
         Sanctum::actingAs($user);
 
-        $this->patchJson('/api/notification-preferences', [
+        $data = $this->patchJson('/api/notification-preferences', [
             'preferences' => [
                 ['type' => 'landlord_request_approved', 'enabled' => false],
                 ['type' => 'landlord_request_rejected', 'enabled' => '0'],
             ],
-        ])
-            ->assertOk()
-            ->assertJsonPath('data.0.enabled', false)
-            ->assertJsonPath('data.1.enabled', false);
+        ])->assertOk()->json('data');
+
+        $this->assertFalse($this->enabledOf($data, 'landlord_request_approved'));
+        $this->assertFalse($this->enabledOf($data, 'landlord_request_rejected'));
 
         $this->assertDatabaseCount('notification_preferences', 2);
     }
@@ -264,5 +264,13 @@ class NotificationPreferenceApiTest extends TestCase
 
         $this->assertTrue($applicant->fresh()->isLandlord());
         $this->assertDatabaseCount('notifications', 0);
+    }
+
+    /**
+     * @param  list<array{type: string, label: string, enabled: bool}>  $data
+     */
+    private function enabledOf(array $data, string $type): bool
+    {
+        return (bool) collect($data)->firstWhere('type', $type)['enabled'];
     }
 }

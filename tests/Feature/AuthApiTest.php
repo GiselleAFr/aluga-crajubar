@@ -194,13 +194,14 @@ class AuthApiTest extends TestCase
             'phone' => '(88) 98888-7777',
         ])->assertOk()
             ->assertJsonPath('message', 'Perfil atualizado com sucesso.')
-            ->assertJsonPath('user.email', 'ana.nova@example.com')
+            // O e-mail não é mais alterado por esta rota (ProfileController grava só nome e telefone).
+            ->assertJsonPath('user.email', 'antes@example.com')
             ->assertJsonPath('user.phone', '+5588988887777');
 
         $this->assertDatabaseHas('users', [
             'id' => $user->id,
             'name' => 'Ana Atualizada',
-            'email' => 'ana.nova@example.com',
+            'email' => 'antes@example.com',
             'phone' => '+5588988887777',
         ]);
     }

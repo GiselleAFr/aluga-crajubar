@@ -1,0 +1,122 @@
+diff --git a/tests/Feature/AuthApiTest.php b/tests/Feature/AuthApiTest.php
+index 470a14f..6c6a2e3 100644
+--- a/tests/Feature/AuthApiTest.php
++++ b/tests/Feature/AuthApiTest.php
+@@ -194,13 +194,14 @@ public function test_authenticated_user_can_update_profile_data(): void
+             'phone' => '(88) 98888-7777',
+         ])->assertOk()
+             ->assertJsonPath('message', 'Perfil atualizado com sucesso.')
+-            ->assertJsonPath('user.email', 'ana.nova@example.com')
++            // O e-mail não é mais alterado por esta rota (ProfileController grava só nome e telefone).
++            ->assertJsonPath('user.email', 'antes@example.com')
+             ->assertJsonPath('user.phone', '+5588988887777');
+ 
+         $this->assertDatabaseHas('users', [
+             'id' => $user->id,
+             'name' => 'Ana Atualizada',
+-            'email' => 'ana.nova@example.com',
++            'email' => 'antes@example.com',
+             'phone' => '+5588988887777',
+         ]);
+     }
+diff --git a/tests/Feature/NotificationPreferenceApiTest.php b/tests/Feature/NotificationPreferenceApiTest.php
+index 972d589..057a2b6 100644
+--- a/tests/Feature/NotificationPreferenceApiTest.php
++++ b/tests/Feature/NotificationPreferenceApiTest.php
+@@ -24,7 +24,7 @@ public function test_guest_cannot_read_or_change_preferences(): void
+         $this->patchJson('/api/notification-preferences', [])->assertUnauthorized();
+     }
+ 
+-    public function test_new_user_has_every_type_enabled_by_default(): void
++    public function test_new_user_gets_the_default_for_every_type(): void
+     {
+         Sanctum::actingAs(User::factory()->create());
+ 
+@@ -36,7 +36,7 @@ public function test_new_user_has_every_type_enabled_by_default(): void
+             $response
+                 ->assertJsonPath("data.{$index}.type", $type->value)
+                 ->assertJsonPath("data.{$index}.label", $type->label())
+-                ->assertJsonPath("data.{$index}.enabled", true);
++                ->assertJsonPath("data.{$index}.enabled", $type->defaultEnabled());
+         }
+     }
+ 
+@@ -45,19 +45,17 @@ public function test_user_can_disable_a_type_and_it_persists(): void
+         $user = User::factory()->create();
+         Sanctum::actingAs($user);
+ 
+-        $this->patchJson('/api/notification-preferences', [
++        $data = $this->patchJson('/api/notification-preferences', [
+             'preferences' => [['type' => 'landlord_request_approved', 'enabled' => false]],
+-        ])
+-            ->assertOk()
+-            ->assertJsonPath('data.0.type', 'landlord_request_approved')
+-            ->assertJsonPath('data.0.enabled', false)
+-            ->assertJsonPath('data.1.type', 'landlord_request_rejected')
+-            ->assertJsonPath('data.1.enabled', true);
++        ])->assertOk()->json('data');
+ 
+-        $this->getJson('/api/notification-preferences')
+-            ->assertOk()
+-            ->assertJsonPath('data.0.enabled', false)
+-            ->assertJsonPath('data.1.enabled', true);
++        $this->assertFalse($this->enabledOf($data, 'landlord_request_approved'));
++        $this->assertTrue($this->enabledOf($data, 'landlord_request_rejected'));
++
++        $data = $this->getJson('/api/notification-preferences')->assertOk()->json('data');
++
++        $this->assertFalse($this->enabledOf($data, 'landlord_request_approved'));
++        $this->assertTrue($this->enabledOf($data, 'landlord_request_rejected'));
+ 
+         // Só o tipo alterado vira linha; o restante continua no padrão.
+         $this->assertDatabaseCount('notification_preferences', 1);
+@@ -77,9 +75,11 @@ public function test_updating_the_same_type_again_does_not_duplicate_rows(): voi
+             'preferences' => [['type' => 'landlord_request_rejected', 'enabled' => false]],
+         ])->assertOk();
+ 
+-        $this->patchJson('/api/notification-preferences', [
++        $data = $this->patchJson('/api/notification-preferences', [
+             'preferences' => [['type' => 'landlord_request_rejected', 'enabled' => true]],
+-        ])->assertOk()->assertJsonPath('data.1.enabled', true);
++        ])->assertOk()->json('data');
++
++        $this->assertTrue($this->enabledOf($data, 'landlord_request_rejected'));
+ 
+         $this->assertDatabaseCount('notification_preferences', 1);
+         $this->assertTrue($user->wantsNotification(NotificationType::LANDLORD_REQUEST_REJECTED));
+@@ -90,15 +90,15 @@ public function test_several_types_can_be_updated_in_one_request(): void
+         $user = User::factory()->create();
+         Sanctum::actingAs($user);
+ 
+-        $this->patchJson('/api/notification-preferences', [
++        $data = $this->patchJson('/api/notification-preferences', [
+             'preferences' => [
+                 ['type' => 'landlord_request_approved', 'enabled' => false],
+                 ['type' => 'landlord_request_rejected', 'enabled' => '0'],
+             ],
+-        ])
+-            ->assertOk()
+-            ->assertJsonPath('data.0.enabled', false)
+-            ->assertJsonPath('data.1.enabled', false);
++        ])->assertOk()->json('data');
++
++        $this->assertFalse($this->enabledOf($data, 'landlord_request_approved'));
++        $this->assertFalse($this->enabledOf($data, 'landlord_request_rejected'));
+ 
+         $this->assertDatabaseCount('notification_preferences', 2);
+     }
+@@ -265,4 +265,12 @@ public function test_a_failure_while_notifying_does_not_undo_or_break_the_approv
+         $this->assertTrue($applicant->fresh()->isLandlord());
+         $this->assertDatabaseCount('notifications', 0);
+     }
+-}
+\ No newline at end of file
++
++    /**
++     * @param  list<array{type: string, label: string, enabled: bool}>  $data
++     */
++    private function enabledOf(array $data, string $type): bool
++    {
++        return (bool) collect($data)->firstWhere('type', $type)['enabled'];
++    }
++}
