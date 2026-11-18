@@ -72,7 +72,12 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return $this->role === UserRole::ADMIN;
+        return in_array($this->role, [UserRole::ADMIN, UserRole::SUPER_ADMIN], true);
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === UserRole::SUPER_ADMIN;
     }
 
     public function imoveis(): HasMany

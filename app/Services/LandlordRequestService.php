@@ -120,7 +120,7 @@ class LandlordRequestService
 
             $applicant = User::query()->whereKey($locked->user_id)->lockForUpdate()->firstOrFail();
 
-            if ($applicant->role === UserRole::ADMIN) {
+            if ($applicant->isAdmin()) {
                 throw $this->error('Esta solicitação pertence a um administrador e não pode ser aprovada.');
             }
 

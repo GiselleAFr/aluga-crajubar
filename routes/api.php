@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Admin\LandlordRequestController as AdminLandlordRequestController;
+use App\Http\Controllers\Api\Admin\OverviewController as AdminOverviewController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\ImovelController;
@@ -48,14 +50,23 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ->whereUuid('notification');
 });
 
-// Análise das solicitações: somente administradores.
-Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin'])->group(function (): void {
+// Painel administrativo: administradores e super administradores.
+Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin,super_admin'])->group(function (): void {
+    Route::get('/overview', AdminOverviewController::class);
     Route::get('/landlord-requests', [AdminLandlordRequestController::class, 'index']);
+    Route::get('/landlord-requests/{landlordRequest}', [AdminLandlordRequestController::class, 'show']);
     Route::get('/landlord-requests/{landlordRequest}/documents/{side}', [AdminLandlordRequestController::class, 'document'])
         ->whereIn('side', ['front', 'back'])
         ->name('admin.landlord-requests.documents.show');
     Route::post('/landlord-requests/{landlordRequest}/approve', [AdminLandlordRequestController::class, 'approve']);
     Route::post('/landlord-requests/{landlordRequest}/reject', [AdminLandlordRequestController::class, 'reject']);
+});
+
+// Gestão de administradores: somente o super administrador.
+Route::prefix('admin')->middleware(['auth:sanctum', 'role:super_admin'])->group(function (): void {
+    Route::get('/admins', [AdminUserController::class, 'index']);
+    Route::post('/admins', [AdminUserController::class, 'store'])->middleware('throttle:10,1');
+    Route::delete('/admins/{admin}', [AdminUserController::class, 'destroy'])->whereNumber('admin');
 });
 
 // Consulta pública de imóveis.

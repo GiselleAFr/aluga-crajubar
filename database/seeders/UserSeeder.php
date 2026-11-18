@@ -18,6 +18,12 @@ class UserSeeder extends Seeder
                 'phone' => null,
             ],
             [
+                'name' => 'Super Administrador',
+                'email' => 'superadmin@alugacrajubar.test',
+                'role' => 'super_admin',
+                'phone' => null,
+            ],
+            [
                 'name' => 'Cliente Teste',
                 'email' => 'cliente@alugacrajubar.test',
                 'role' => 'client',
@@ -31,6 +37,13 @@ class UserSeeder extends Seeder
                 'phone' => $this->telefoneDeTeste(),
             ],
         ];
+
+        if (! app()->environment(['local', 'testing'])) {
+            $usuarios = array_values(array_filter(
+                $usuarios,
+                fn (array $dados) => ! in_array($dados['role'], ['admin', 'super_admin'], true),
+            ));
+        }
 
         foreach ($usuarios as $dados) {
             $usuario = User::firstOrNew([

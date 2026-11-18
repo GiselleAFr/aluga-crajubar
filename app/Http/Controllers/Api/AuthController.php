@@ -171,8 +171,14 @@ class AuthController extends Controller
             ...$user->only(['id', 'name', 'email', 'phone', 'created_at']),
             'role' => $user->role->value,
             'is_landlord' => $user->isLandlord(),
-            // O Flutter deve exibir a aba "Locador" somente se ela estiver presente nesta lista.
-            'available_tabs' => $user->isLandlord() ? ['cliente', 'locador'] : ['cliente'],
+            'is_admin' => $user->isAdmin(),
+            'is_super_admin' => $user->isSuperAdmin(),
+            // O Flutter só exibe as abas presentes nesta lista.
+            'available_tabs' => match (true) {
+                $user->isAdmin() => ['admin'],
+                $user->isLandlord() => ['cliente', 'locador'],
+                default => ['cliente'],
+            },
             // null (nunca solicitou), pending, approved ou rejected.
             'landlord_request_status' => $user->latestLandlordRequest?->status->value,
         ];

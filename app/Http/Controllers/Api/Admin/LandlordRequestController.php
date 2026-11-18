@@ -41,6 +41,18 @@ class LandlordRequestController extends Controller
         ]);
     }
 
+    /**
+     * Detalhes de uma solicitação (inclui os links dos documentos enquanto pendente).
+     */
+    public function show(LandlordRequest $landlordRequest): JsonResponse
+    {
+        $landlordRequest->load('user:id,name,email,phone');
+
+        return response()->json([
+            'data' => (new LandlordRequestResource($landlordRequest))->resolve(),
+        ]);
+    }
+
     public function document(LandlordRequest $landlordRequest, string $side): StreamedResponse
     {
         abort_unless($landlordRequest->status === LandlordRequestStatus::PENDING, 404);
