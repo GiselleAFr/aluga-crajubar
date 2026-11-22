@@ -62,17 +62,21 @@ class StoreLandlordRequestRequest extends FormRequest
 
     public function rules(): array
     {
+        // MVP (LANDLORD_AUTO_APPROVE=true): tipo e fotos do documento são opcionais.
+        // Com a análise de administrador ligada, voltam a ser obrigatórios.
+        $documentos = config('landlord.auto_approve') ? 'nullable' : 'required';
+
         return [
             'full_name' => ['required', 'string', 'max:255'],
             'cpf' => ['required', 'string', 'regex:/^\d{11}$/'],
             'birth_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
-            'document_type' => ['required', 'string', Rule::in(['rg', 'cnh', 'passport'])],
+            'document_type' => [$documentos, 'string', Rule::in(['rg', 'cnh', 'passport'])],
             'email' => ['nullable', 'string', 'email', 'max:255'],
             'primary_phone' => ['required', 'string', 'regex:/^\+55\d{10,11}$/'],
             'secondary_phone' => ['nullable', 'string', 'regex:/^\+55\d{10,11}$/'],
             'commercial_phone' => ['nullable', 'string', 'regex:/^\+55\d{10,11}$/'],
-            'document_front' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:10240'],
-            'document_back' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:10240'],
+            'document_front' => [$documentos, 'image', 'mimes:jpg,jpeg,png', 'max:10240'],
+            'document_back' => [$documentos, 'image', 'mimes:jpg,jpeg,png', 'max:10240'],
             'message' => ['nullable', 'string', 'max:1000'],
         ];
     }

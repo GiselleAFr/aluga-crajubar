@@ -15,11 +15,13 @@ class ImovelController extends Controller
 {
     private const STATUSES = ['available', 'rented', 'unavailable'];
 
+    private const TIPOS = ['casa', 'apartamento', 'quarto', 'pousada', 'kitnet', 'terreno', 'comercial', 'outro'];
+
     public function index(SearchImovelRequest $request)
     {
-        $query = Imovel::query()->with('fotos');
+        // A consulta pública só mostra imóveis disponíveis.
+        $query = Imovel::query()->with('fotos')->where('status', 'available');
 
-        // Busca textual por título, descrição ou localização
         // Busca textual: ignora maiúsculas/minúsculas e aceita várias palavras
         if ($request->filled('q')) {
             $palavras = preg_split(
@@ -65,7 +67,6 @@ class ImovelController extends Controller
             }
         );
 
-
         // Filtro por cidade
         $query->when($request->filled('cidade'), function ($q) use ($request) {
             $q->whereRaw('LOWER(cidade) LIKE ?', ['%' . mb_strtolower($request->input('cidade')) . '%']);
@@ -75,7 +76,6 @@ class ImovelController extends Controller
         $query->when($request->filled('bairro'), function ($q) use ($request) {
             $q->whereRaw('LOWER(bairro) LIKE ?', ['%' . mb_strtolower($request->input('bairro')) . '%']);
         });
-
 
         // Filtro por preço mínimo
         $query->when(
@@ -169,7 +169,7 @@ class ImovelController extends Controller
         $dados = $request->validate([
             'titulo' => ['required', 'string', 'max:255'],
             'descricao' => ['nullable', 'string'],
-            'tipo' => ['required', 'in:casa,apartamento,terreno,comercial,outro'],
+            'tipo' => ['required', Rule::in(self::TIPOS)],
             'finalidade' => ['required', 'in:venda,aluguel'],
             'periodo_locacao' => [
                 'required_if:finalidade,aluguel',
@@ -184,6 +184,8 @@ class ImovelController extends Controller
             'quartos' => ['sometimes', 'integer', 'min:0'],
             'banheiros' => ['sometimes', 'integer', 'min:0'],
             'area' => ['nullable', 'numeric', 'min:0'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'status' => ['sometimes', Rule::in(self::STATUSES)],
         ]);
 
@@ -215,7 +217,7 @@ class ImovelController extends Controller
         $dados = $request->validate([
             'titulo' => ['sometimes', 'required', 'string', 'max:255'],
             'descricao' => ['sometimes', 'nullable', 'string'],
-            'tipo' => ['sometimes', 'required', 'in:casa,apartamento,terreno,comercial,outro'],
+            'tipo' => ['sometimes', 'required', Rule::in(self::TIPOS)],
             'finalidade' => ['sometimes', 'required', 'in:venda,aluguel'],
             'periodo_locacao' => [
                 Rule::requiredIf(
@@ -235,6 +237,8 @@ class ImovelController extends Controller
             'quartos' => ['sometimes', 'integer', 'min:0'],
             'banheiros' => ['sometimes', 'integer', 'min:0'],
             'area' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'latitude' => ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
             'status' => ['sometimes', Rule::in(self::STATUSES)],
         ]);
 

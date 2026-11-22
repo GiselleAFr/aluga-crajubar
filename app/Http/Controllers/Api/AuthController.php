@@ -28,6 +28,12 @@ class AuthController extends Controller
 
         return $this->authenticatedResponse($user, $request->input('device_name', 'flutter'))
             ->setStatusCode(201);
+
+        return $this->authenticatedResponse(
+            $user,
+            $request->input('device_name', 'flutter'),
+            $request->boolean('remember'),
+        )->setStatusCode(201);
     }
 
     public function login(LoginRequest $request): JsonResponse

@@ -24,26 +24,30 @@ class LandlordRequestService
     /**
      * Registra uma nova solicitação com status "pending".
      *
+     * Com LANDLORD_AUTO_APPROVE=true (MVP), a solicitação já nasce aprovada e o
+     * usuário vira locador na mesma transação. Os documentos passam a ser opcionais.
+     *
      * @param  array{
      *     full_name: string,
      *     cpf: string,
      *     birth_date: string,
-     *     document_type: string,
+     *     document_type?: string|null,
      *     email?: string|null,
      *     primary_phone: string,
      *     secondary_phone?: string|null,
      *     commercial_phone?: string|null,
-     *     document_front: UploadedFile,
-     *     document_back: UploadedFile,
+     *     document_front?: UploadedFile|null,
+     *     document_back?: UploadedFile|null,
      *     message?: string|null
      * }  $data
      */
     public function submit(User $user, array $data): LandlordRequest
     {
         $storedPaths = [];
+        $approvedNow = false;
 
         try {
-            return DB::transaction(function () use ($user, $data, &$storedPaths): LandlordRequest {
+            $landlordRequest = DB::transaction(function () use ($user, $data, &$storedPaths, &$approvedNow): LandlordRequest {
                 // Bloqueia a linha do usuário para serializar envios simultâneos dele.
                 $applicant = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
 
@@ -60,19 +64,19 @@ class LandlordRequestService
                 }
 
                 try {
-                    $landlordRequest = new LandlordRequest;
-                    $landlordRequest->fill([
+                    $request = new LandlordRequest;
+                    $request->fill([
                         'full_name' => $data['full_name'],
                         'cpf' => $data['cpf'],
                         'birth_date' => $data['birth_date'],
-                        'document_type' => $data['document_type'],
+                        'document_type' => $data['document_type'] ?? null,
                         'email' => $data['email'] ?? null,
                         'primary_phone' => $data['primary_phone'],
                         'secondary_phone' => $data['secondary_phone'] ?? null,
                         'commercial_phone' => $data['commercial_phone'] ?? null,
                         'message' => $data['message'] ?? null,
                     ]);
-                    $landlordRequest->forceFill([
+                    $request->forceFill([
                         'user_id' => $applicant->id,
                         'status' => LandlordRequestStatus::PENDING,
                     ])->save();
@@ -84,7 +88,13 @@ class LandlordRequestService
                 $documentPaths = [];
                 foreach (['front', 'back'] as $side) {
                     $field = 'document_'.$side;
-                    $path = $data[$field]->store('landlord-requests/'.$landlordRequest->id, 'local');
+                    $file = $data[$field] ?? null;
+
+                    if (! $file instanceof UploadedFile) {
+                        continue;
+                    }
+
+                    $path = $file->store('landlord-requests/'.$request->id, 'local');
                     if ($path === false) {
                         throw new RuntimeException('Não foi possível armazenar os documentos enviados.');
                     }
@@ -93,9 +103,25 @@ class LandlordRequestService
                     $documentPaths[$field.'_path'] = $path;
                 }
 
-                $landlordRequest->forceFill($documentPaths)->save();
+                if ($documentPaths !== []) {
+                    $request->forceFill($documentPaths)->save();
+                }
 
-                return $landlordRequest;
+                // MVP: aprovação automática, sem painel de administração.
+                if (config('landlord.auto_approve')) {
+                    $request->forceFill([
+                        'status' => LandlordRequestStatus::APPROVED,
+                        'reviewed_at' => now(),
+                        'rejection_reason' => null,
+                    ])->save();
+
+                    // "role" não está no $fillable de propósito; só este fluxo pode alterá-lo.
+                    $applicant->forceFill(['role' => UserRole::LANDLORD])->save();
+
+                    $approvedNow = true;
+                }
+
+                return $request;
             });
         } catch (Throwable $exception) {
             if ($storedPaths !== [] && ! Storage::disk('local')->delete($storedPaths)) {
@@ -108,6 +134,13 @@ class LandlordRequestService
 
             throw $exception;
         }
+
+        if ($approvedNow) {
+            $this->deleteApplicantDocuments($landlordRequest);
+            $this->notifyApplicant($user, new LandlordRequestApprovedNotification($landlordRequest->id));
+        }
+
+        return $landlordRequest;
     }
 
     /**

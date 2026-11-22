@@ -376,6 +376,7 @@ class BookingController extends Controller
 
         if (
             $imovel->finalidade !== 'aluguel'
+            || $imovel->status !== 'available'
             || $imovel->periodo_locacao !== $validated['modalidade']
         ) {
             return response()->json([
@@ -383,6 +384,12 @@ class BookingController extends Controller
                 'disponivel' => false,
                 'message' => 'Este imóvel não aceita reservas nessa modalidade.',
             ]);
+        }
+
+        if ($imovel->status !== 'available') {
+            return response()->json([
+                'message' => 'Este imóvel não está disponível para reserva no momento.',
+            ], 422);
         }
 
         $checkIn = Carbon::parse($validated['check_in']);
