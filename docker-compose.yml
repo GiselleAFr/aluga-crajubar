@@ -1,16 +1,99 @@
+name: aluga-crajubar
+
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: aluga-crajubar-postgres
+  # ---------- PROXY REVERSO / BALANCEADOR ----------
+  traefik:
+    image: traefik:v3.6
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: aluga_crajubar
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=aluga-proxy
+      - --entrypoints.web.address=:80
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --log.level=INFO
+      - --accesslog=true
     ports:
-      - "5432:5432"
+      - "80:80"
+      - "127.0.0.1:8080:8080"   # painel, só acessível no seu PC
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy
+
+  # ---------- BANCO: MASTER (escrita) ----------
+  master:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env.docker
+    volumes:
+      - master_data:/var/lib/postgresql/data
+      - ./docker/postgres/master-init.sh:/docker-entrypoint-initdb.d/01-master-init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 10
+    networks:
+      - backend
+
+  # ---------- BANCO: SLAVE (réplica, só leitura) ----------
+  slave:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env.docker
+    environment:
+      MASTER_HOST: master
+    user: postgres
+    entrypoint: ["sh", "/slave-entrypoint.sh"]
+    volumes:
+      - slave_data:/var/lib/postgresql/data
+      - ./docker/postgres/slave-entrypoint.sh:/slave-entrypoint.sh:ro
+    depends_on:
+      master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 20
+    networks:
+      - backend
+
+  # ---------- API LARAVEL (2 réplicas) ----------
+  api:
+    build: .
+    image: aluga-crajubar/api
+    restart: unless-stopped
+    env_file: .env.docker
+    deploy:
+      replicas: 2
+    volumes:
+      - storage_public:/var/www/html/storage/app/public   # fotos compartilhadas
+    depends_on:
+      master:
+        condition: service_healthy
+      slave:
+        condition: service_healthy
+    networks:
+      - proxy
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=aluga-proxy"
+      - "traefik.http.routers.aluga-api.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.aluga-api.entrypoints=web"
+      - "traefik.http.services.aluga-api.loadbalancer.server.port=80"
+      - "traefik.http.services.aluga-api.loadbalancer.healthcheck.path=/up"
+      - "traefik.http.services.aluga-api.loadbalancer.healthcheck.interval=10s"
 
 volumes:
-  postgres_data:
+  master_data:
+  slave_data:
+  storage_public:
+
+networks:
+  proxy:
+    name: aluga-proxy
+  backend:
+    name: aluga-backend
+    internal: true

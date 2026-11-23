@@ -6,84 +6,46 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
+/**
+ * Usuários fixos de demonstração (senha de todos: password).
+ * Não usa factory/Faker, para rodar também dentro do Docker.
+ */
 class UserSeeder extends Seeder
 {
     public function run(): void
     {
         $usuarios = [
-            [
-                'name' => 'Administrador',
-                'email' => 'admin@alugacrajubar.test',
-                'role' => 'admin',
-                'phone' => null,
-            ],
-            [
-                'name' => 'Cliente Teste',
-                'email' => 'cliente@alugacrajubar.test',
-                'role' => 'client',
-                'phone' => null,
-            ],
-            [
-                'name' => 'Proprietário Teste',
-                'email' => 'proprietario@alugacrajubar.test',
-                'role' => 'landlord',
-                // Número real de quem está testando (definido no .env).
-                'phone' => $this->telefoneDeTeste(),
-            ],
+            // [nome, e-mail, papel, telefone]
+            ['Administrador', 'admin@alugacrajubar.test', 'admin', null],
+            ['Cliente Teste', 'cliente@alugacrajubar.test', 'client', null],
+            ['Ana Clara Souza', 'cliente1@alugacrajubar.test', 'client', null],
+            ['Bruno Alencar', 'cliente2@alugacrajubar.test', 'client', null],
+            ['Proprietário Teste', 'proprietario@alugacrajubar.test', 'landlord', $this->telefoneDeTeste()],
+            ['Maria do Socorro Lima', 'proprietario1@alugacrajubar.test', 'landlord', '+5588900000001'],
+            ['José Wellington Pereira', 'proprietario2@alugacrajubar.test', 'landlord', '+5588900000002'],
         ];
 
-        foreach ($usuarios as $dados) {
-            $usuario = User::firstOrNew([
-                'email' => $dados['email'],
-            ]);
+        foreach ($usuarios as [$nome, $email, $papel, $telefone]) {
+            $usuario = User::firstOrNew(['email' => $email]);
 
-            $usuario->name = $dados['name'];
-            $usuario->password = Hash::make('password');
-            $usuario->role = $dados['role'];
-            $usuario->email_verified_at = now();
-            $usuario->save();
-
-            $this->definirTelefone($usuario, $dados['phone']);
+            $usuario->forceFill([
+                'name' => $nome,
+                'password' => Hash::make('password'),
+                'role' => $papel,
+                'phone' => $telefone,
+                'email_verified_at' => now(),
+            ])->save();
         }
 
-        // Cria mais 4 clientes e 4 proprietários, sem duplicar
-        // as contas nas próximas execuções do seeder.
-        for ($i = 1; $i <= 4; $i++) {
-            $emailCliente = "cliente{$i}@alugacrajubar.test";
-
-            if (! User::where('email', $emailCliente)->exists()) {
-                User::factory()->create([
-                    'name' => "Cliente {$i}",
-                    'email' => $emailCliente,
-                ]);
-            }
-
-            $emailProprietario = "proprietario{$i}@alugacrajubar.test";
-
-            $proprietario = User::where('email', $emailProprietario)->first()
-                ?? User::factory()->landlord()->create([
-                    'name' => "Proprietário {$i}",
-                    'email' => $emailProprietario,
-                ]);
-
-            // Garante telefone também nas contas que já existiam.
-            $this->definirTelefone($proprietario, $this->telefoneFicticio($i));
-        }
+        $this->command?->info('Usuários de demonstração criados (senha: password).');
     }
 
-    /**
-     * Telefone de teste vindo do .env (SEED_TEST_PHONE), no mesmo formato
-     * que o cadastro da API grava: +55DDDNÚMERO.
-     */
+    /** Telefone do .env (SEED_TEST_PHONE) no formato +55DDDNÚMERO. */
     private function telefoneDeTeste(): ?string
     {
         $digitos = preg_replace('/\D+/', '', (string) env('SEED_TEST_PHONE'));
 
         if ($digitos === '') {
-            $this->command?->warn(
-                'SEED_TEST_PHONE não está definido no .env: o "Proprietário Teste" ficará sem telefone.'
-            );
-
             return null;
         }
 
@@ -91,49 +53,6 @@ class UserSeeder extends Seeder
             $digitos = '55'.$digitos;
         }
 
-        $telefone = '+'.$digitos;
-
-        if (! preg_match('/^\+[1-9]\d{9,14}$/', $telefone)) {
-            $this->command?->warn("SEED_TEST_PHONE inválido ({$telefone}). Use DDD + número, só dígitos.");
-
-            return null;
-        }
-
-        return $telefone;
-    }
-
-    /**
-     * Números fictícios (DDD 88, prefixo 9 0000-xxxx, faixa não alocada),
-     * para nenhum telefone real receber mensagens de teste.
-     */
-    private function telefoneFicticio(int $indice): string
-    {
-        return '+55889'.str_pad((string) $indice, 8, '0', STR_PAD_LEFT);
-    }
-
-    /**
-     * Grava o telefone se ele ainda não estiver com outra conta
-     * (a coluna phone é única).
-     */
-    private function definirTelefone(User $usuario, ?string $telefone): void
-    {
-        if ($telefone === null || $usuario->phone === $telefone) {
-            return;
-        }
-
-        $emUso = User::where('phone', $telefone)
-            ->where('id', '!=', $usuario->id)
-            ->exists();
-
-        if ($emUso) {
-            $this->command?->warn(
-                "O telefone {$telefone} já pertence a outra conta; {$usuario->email} não foi alterado."
-            );
-
-            return;
-        }
-
-        $usuario->phone = $telefone;
-        $usuario->save();
+        return preg_match('/^[1-9]\d{9,14}$/', $digitos) ? '+'.$digitos : null;
     }
 }

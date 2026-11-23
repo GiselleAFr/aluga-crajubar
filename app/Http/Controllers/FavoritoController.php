@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\ImovelResource;
 use App\Models\Imovel;
 use Illuminate\Http\Request;
 
@@ -18,7 +19,7 @@ class FavoritoController extends Controller
 
         return response()->json([
             'message' => 'Imóvel adicionado aos favoritos.',
-            'imovel' => $imovel,
+            'imovel' => (new ImovelResource($imovel->load('fotos')))->resolve($request),
         ], 201);
     }
 
@@ -49,7 +50,9 @@ class FavoritoController extends Controller
     {
         $favoritos = $request->user()
             ->favoritos()
-            ->paginate(10);
+            ->with('fotos')
+            ->paginate(10)
+            ->through(fn (Imovel $imovel) => (new ImovelResource($imovel))->resolve($request));
 
         return response()->json($favoritos);
     }
@@ -65,6 +68,7 @@ class FavoritoController extends Controller
 
         $favoritos = $request->user()
             ->favoritos()
+            ->with('fotos')
             ->where(function ($query) use ($dados) {
                 $busca = $dados['busca'];
 
@@ -72,7 +76,8 @@ class FavoritoController extends Controller
                     ->orWhere('cidade', 'ILIKE', "%{$busca}%")
                     ->orWhere('bairro', 'ILIKE', "%{$busca}%");
             })
-            ->paginate(10);
+            ->paginate(10)
+            ->through(fn (Imovel $imovel) => (new ImovelResource($imovel))->resolve($request));
 
         return response()->json($favoritos);
     }
