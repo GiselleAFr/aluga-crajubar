@@ -147,7 +147,7 @@ class ImovelController extends Controller
         return response()->json($imoveis);
     }
 
-    public function landlordIndex(Request $request)
+        public function landlordIndex(Request $request)
     {
         $filters = $request->validate([
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
@@ -155,11 +155,25 @@ class ImovelController extends Controller
 
         $imoveis = Imovel::query()
             ->with('fotos')
+            // true quando há reserva confirmada que ainda não terminou
+            ->withExists(['bookings as tem_reserva_ativa' => fn ($q) => $q
+                ->where('status', 'confirmed')
+                ->whereDate('check_out', '>', today())])
             ->where('user_id', $request->user()->id)
             ->orderByDesc('created_at')
             ->paginate($filters['per_page'] ?? 15);
 
-        $imoveis->through(fn (Imovel $imovel) => (new ImovelResource($imovel))->resolve());
+        $imoveis->through(function (Imovel $imovel) {
+            $dados = (new ImovelResource($imovel))->resolve();
+
+            // O status gravado continua sendo a escolha do locador;
+            // aqui só refletimos as reservas confirmadas.
+            if ($dados['status'] === 'available' && $imovel->tem_reserva_ativa) {
+                $dados['status'] = 'rented';
+            }
+
+            return $dados;
+        });
 
         return response()->json($imoveis);
     }
